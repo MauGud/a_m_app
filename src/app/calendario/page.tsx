@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { useActivitiesStore } from '@/stores/activities-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { cn } from '@/lib/utils';
@@ -30,7 +31,6 @@ const RECURRING_OPTIONS = [
   { value: 'yearly' as const, label: 'Anual' },
 ];
 
-// Cumpleaños fijos
 const BIRTHDAYS = [
   { name: 'Amanda', date: '11-17', emoji: '🎂👩' },
   { name: 'Mau', date: '07-11', emoji: '🎂👨' },
@@ -75,6 +75,8 @@ export default function CalendarioPage() {
   const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueTime, setDueTime] = useState('');
   const [recurring, setRecurring] = useState<RecurringType>('none');
+  const [completing, setCompleting] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const pendingActivities = getPendingActivities();
   const overdueActivities = getOverdueActivities();
@@ -90,7 +92,7 @@ export default function CalendarioPage() {
       due_time: dueTime || undefined,
       assigned_to: undefined,
       created_by: memberSlot,
-      recurring: recurring === 'yearly' ? 'monthly' : recurring, // yearly se maneja como monthly por ahora
+      recurring: recurring === 'yearly' ? 'monthly' : recurring,
     });
 
     setTitle('');
@@ -100,6 +102,22 @@ export default function CalendarioPage() {
     setDueTime('');
     setRecurring('none');
     setShowForm(false);
+  };
+
+  const handleComplete = (id: string) => {
+    if (!memberSlot) return;
+    setCompleting(id);
+    setTimeout(() => {
+      completeActivity(id, memberSlot);
+      setCompleting(null);
+    }, 300);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (deleteConfirm) {
+      deleteActivity(deleteConfirm);
+      setDeleteConfirm(null);
+    }
   };
 
   const getCategoryInfo = (cat: string) => {
@@ -202,7 +220,7 @@ export default function CalendarioPage() {
                     key={cat.value}
                     onClick={() => setCategory(cat.value)}
                     className={cn(
-                      'px-3 py-2 rounded-full text-sm flex items-center gap-1 transition-all',
+                      'px-3 py-2 rounded-full text-sm flex items-center gap-1 transition-all active:scale-95',
                       category === cat.value
                         ? `${cat.color} ring-2 ring-offset-1 ring-gray-400`
                         : 'bg-gray-100 hover:bg-gray-200'
@@ -244,10 +262,10 @@ export default function CalendarioPage() {
                     key={opt.value}
                     onClick={() => setRecurring(opt.value)}
                     className={cn(
-                      'px-3 py-2 rounded-lg text-sm transition-all',
+                      'px-3 py-2 rounded-lg text-sm transition-all active:scale-95',
                       recurring === opt.value
                         ? 'bg-pastel-green-100 ring-2 ring-pastel-green-300'
-                        : 'bg-gray-100'
+                        : 'bg-gray-100 hover:bg-gray-200'
                     )}
                   >
                     {opt.label}
@@ -276,13 +294,24 @@ export default function CalendarioPage() {
                 return (
                   <Card
                     key={activity.id}
-                    className="p-3 border-l-4 border-red-400 bg-red-50"
+                    className={cn(
+                      "p-3 border-l-4 border-red-400 bg-red-50 transition-all duration-300",
+                      completing === activity.id && "bg-pastel-green-100 scale-95 opacity-50"
+                    )}
                   >
                     <div className="flex items-start gap-3">
                       <button
-                        onClick={() => memberSlot && completeActivity(activity.id, memberSlot)}
-                        className="mt-1 w-5 h-5 rounded-full border-2 border-red-400 flex-shrink-0 hover:bg-red-100"
-                      />
+                        onClick={() => handleComplete(activity.id)}
+                        disabled={completing === activity.id}
+                        className={cn(
+                          "mt-1 w-6 h-6 rounded-full border-2 flex-shrink-0 transition-all flex items-center justify-center",
+                          completing === activity.id 
+                            ? "border-pastel-green-400 bg-pastel-green-200"
+                            : "border-red-400 hover:bg-red-100 active:scale-90"
+                        )}
+                      >
+                        {completing === activity.id && <span className="text-pastel-green-600 text-sm">✓</span>}
+                      </button>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className={cn('text-xs px-2 py-0.5 rounded-full', catInfo.color)}>
@@ -298,8 +327,8 @@ export default function CalendarioPage() {
                         )}
                       </div>
                       <button
-                        onClick={() => deleteActivity(activity.id)}
-                        className="text-gray-400 hover:text-red-500 p-1"
+                        onClick={() => setDeleteConfirm(activity.id)}
+                        className="text-gray-400 hover:text-red-500 p-2 -m-2 hover:bg-red-100 rounded-full transition-all min-w-[44px] min-h-[44px] flex items-center justify-center"
                       >
                         ✕
                       </button>
@@ -321,12 +350,26 @@ export default function CalendarioPage() {
                 .map((activity) => {
                   const catInfo = getCategoryInfo(activity.category);
                   return (
-                    <Card key={activity.id} className="p-3">
+                    <Card 
+                      key={activity.id} 
+                      className={cn(
+                        "p-3 transition-all duration-300",
+                        completing === activity.id && "bg-pastel-green-100 scale-95 opacity-50"
+                      )}
+                    >
                       <div className="flex items-start gap-3">
                         <button
-                          onClick={() => memberSlot && completeActivity(activity.id, memberSlot)}
-                          className="mt-1 w-5 h-5 rounded-full border-2 border-gray-300 flex-shrink-0 hover:border-pastel-green-400 hover:bg-pastel-green-50"
-                        />
+                          onClick={() => handleComplete(activity.id)}
+                          disabled={completing === activity.id}
+                          className={cn(
+                            "mt-1 w-6 h-6 rounded-full border-2 flex-shrink-0 transition-all flex items-center justify-center",
+                            completing === activity.id 
+                              ? "border-pastel-green-400 bg-pastel-green-200"
+                              : "border-gray-300 hover:border-pastel-green-400 hover:bg-pastel-green-50 active:scale-90"
+                          )}
+                        >
+                          {completing === activity.id && <span className="text-pastel-green-600 text-sm">✓</span>}
+                        </button>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className={cn('text-xs px-2 py-0.5 rounded-full', catInfo.color)}>
@@ -348,8 +391,8 @@ export default function CalendarioPage() {
                           )}
                         </div>
                         <button
-                          onClick={() => deleteActivity(activity.id)}
-                          className="text-gray-400 hover:text-red-500 p-1"
+                          onClick={() => setDeleteConfirm(activity.id)}
+                          className="text-gray-400 hover:text-red-500 p-2 -m-2 hover:bg-red-50 rounded-full transition-all min-w-[44px] min-h-[44px] flex items-center justify-center"
                         >
                           ✕
                         </button>
@@ -371,6 +414,18 @@ export default function CalendarioPage() {
           )
         )}
       </div>
+
+      {/* Confirm Delete Modal */}
+      <ConfirmModal
+        isOpen={deleteConfirm !== null}
+        title="¿Eliminar actividad?"
+        message="Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="danger"
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteConfirm(null)}
+      />
     </AppLayout>
   );
 }

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { useAuthStore } from '@/stores/auth-store';
 import { usePlansStore } from '@/stores/plans-store';
 import { cn } from '@/lib/utils';
@@ -18,6 +19,8 @@ export default function PlanesPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [activeTab, setActiveTab] = useState<'pending' | 'completed'>('pending');
+  const [completing, setCompleting] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const pendingPlans = getPendingPlans();
   const completedPlans = getCompletedPlans();
@@ -28,6 +31,21 @@ export default function PlanesPage() {
       setTitle('');
       setDescription('');
       setShowForm(false);
+    }
+  };
+
+  const handleComplete = (id: string) => {
+    setCompleting(id);
+    setTimeout(() => {
+      completePlan(id);
+      setCompleting(null);
+    }, 300);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (deleteConfirm) {
+      deletePlan(deleteConfirm);
+      setDeleteConfirm(null);
     }
   };
 
@@ -97,12 +115,26 @@ export default function PlanesPage() {
               </div>
             ) : (
               pendingPlans.map((plan) => (
-                <Card key={plan.id} className="p-4">
+                <Card 
+                  key={plan.id} 
+                  className={cn(
+                    "p-4 transition-all duration-300",
+                    completing === plan.id && "bg-pastel-green-100 scale-95 opacity-50"
+                  )}
+                >
                   <div className="flex items-start gap-3">
                     <button
-                      onClick={() => completePlan(plan.id)}
-                      className="mt-1 w-5 h-5 rounded-full border-2 border-pastel-pink-200 flex-shrink-0 hover:bg-pastel-pink-100 transition-all"
-                    />
+                      onClick={() => handleComplete(plan.id)}
+                      disabled={completing === plan.id}
+                      className={cn(
+                        "mt-1 w-6 h-6 rounded-full border-2 flex-shrink-0 transition-all flex items-center justify-center",
+                        completing === plan.id 
+                          ? "border-pastel-green-400 bg-pastel-green-200"
+                          : "border-pastel-pink-200 hover:bg-pastel-pink-100 hover:border-pastel-pink-300 active:scale-90"
+                      )}
+                    >
+                      {completing === plan.id && <span className="text-pastel-green-600 text-sm">✓</span>}
+                    </button>
                     <div className="flex-1">
                       <h3 className="font-medium text-gray-800">{plan.title}</h3>
                       {plan.description && (
@@ -110,8 +142,8 @@ export default function PlanesPage() {
                       )}
                     </div>
                     <button
-                      onClick={() => deletePlan(plan.id)}
-                      className="text-gray-400 hover:text-red-500 p-1"
+                      onClick={() => setDeleteConfirm(plan.id)}
+                      className="text-gray-400 hover:text-red-500 p-2 -m-2 hover:bg-red-50 rounded-full transition-all min-w-[44px] min-h-[44px] flex items-center justify-center"
                     >
                       ✕
                     </button>
@@ -133,7 +165,7 @@ export default function PlanesPage() {
               completedPlans.map((plan) => (
                 <Card key={plan.id} className="p-4 bg-pastel-green-50/50">
                   <div className="flex items-start gap-3">
-                    <span className="mt-1 text-pastel-green-400">✓</span>
+                    <span className="mt-1 w-6 h-6 rounded-full bg-pastel-green-200 flex items-center justify-center text-pastel-green-600 text-sm flex-shrink-0">✓</span>
                     <div className="flex-1">
                       <h3 className="font-medium text-gray-600 line-through">{plan.title}</h3>
                       {plan.description && (
@@ -147,6 +179,18 @@ export default function PlanesPage() {
           </div>
         )}
       </div>
+
+      {/* Confirm Delete Modal */}
+      <ConfirmModal
+        isOpen={deleteConfirm !== null}
+        title="¿Eliminar plan?"
+        message="Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="danger"
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteConfirm(null)}
+      />
     </AppLayout>
   );
 }
