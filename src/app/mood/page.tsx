@@ -12,7 +12,8 @@ import { cn, MOOD_CONFIG, getMoodEmoji, formatDate } from '@/lib/utils';
 type MoodValue = 1 | 2 | 3 | 4 | 5;
 
 export default function MoodPage() {
-  const { memberSlot, partnerName } = useAuthStore();
+  const { memberSlot } = useAuthStore();
+  const partnerName = memberSlot === 'MEMBER_A' ? 'Mau' : 'Amanda';
   const { upsertMood, getTodayMood, getPartnerTodayMood, getRecentMoods } = useMoodStore();
 
   const [selectedMood, setSelectedMood] = useState<MoodValue | null>(null);

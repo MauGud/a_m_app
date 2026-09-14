@@ -11,7 +11,7 @@ import { useActivitiesStore } from '@/stores/activities-store';
 import { getMoodEmoji, getMoodLabel } from '@/lib/utils';
 
 export default function HomePage() {
-  const { displayName, partnerName, memberSlot } = useAuthStore();
+  const { memberSlot } = useAuthStore();
   const { getTodayMood, getPartnerTodayMood } = useMoodStore();
   const { getPendingPlans } = usePlansStore();
   const { memories } = useMemoriesStore();
@@ -29,9 +29,9 @@ export default function HomePage() {
         {/* Greeting */}
         <div className="text-center py-4">
           <h2 className="text-2xl font-bold text-gray-800">
-            Hola, {displayName} 💕
+            Hola, {memberSlot === 'MEMBER_A' ? 'Amanda' : 'Mau'} 💕
           </h2>
-          <p className="text-gray-600">¿Cómo están hoy?</p>
+          <p className="text-gray-600">¿Cómo estamos hoy?</p>
         </div>
 
         {/* Mood Section */}
@@ -42,7 +42,7 @@ export default function HomePage() {
           <div className="grid grid-cols-2 gap-4">
             <Link href="/mood" className="block">
               <div className="text-center p-3 rounded-xl bg-pastel-pink-50 hover:bg-pastel-pink-100 transition-all">
-                <p className="text-sm text-gray-600 mb-1">{displayName}</p>
+                <p className="text-sm text-gray-600 mb-1">{memberSlot === 'MEMBER_A' ? 'Amanda' : 'Mau'}</p>
                 {myMood ? (
                   <>
                     <span className="text-3xl">{getMoodEmoji(myMood.value)}</span>
@@ -54,7 +54,7 @@ export default function HomePage() {
               </div>
             </Link>
             <div className="text-center p-3 rounded-xl bg-pastel-green-50">
-              <p className="text-sm text-gray-600 mb-1">{partnerName}</p>
+              <p className="text-sm text-gray-600 mb-1">{memberSlot === 'MEMBER_A' ? 'Mau' : 'Amanda'}</p>
               {partnerMood ? (
                 <>
                   <span className="text-3xl">{getMoodEmoji(partnerMood.value)}</span>

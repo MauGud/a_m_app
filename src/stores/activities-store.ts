@@ -4,7 +4,7 @@ import { supabase, DbActivity, isSupabaseConfigured } from '@/lib/supabase';
 import { useAuthStore } from './auth-store';
 
 type MemberSlot = 'MEMBER_A' | 'MEMBER_B';
-type ActivityCategory = 'pago' | 'recoger' | 'pendiente' | 'casa' | 'compras';
+type ActivityCategory = 'pago' | 'recoger' | 'pendiente' | 'casa' | 'compras' | 'date' | 'cumple';
 type ActivityStatus = 'pending' | 'completed';
 type RecurringType = 'none' | 'weekly' | 'monthly';
 

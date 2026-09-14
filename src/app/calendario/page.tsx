@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -10,25 +10,56 @@ import { useActivitiesStore } from '@/stores/activities-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { cn } from '@/lib/utils';
 
-type ActivityCategory = 'pago' | 'recoger' | 'pendiente' | 'casa' | 'compras';
-type RecurringType = 'none' | 'weekly' | 'monthly';
+type ActivityCategory = 'pago' | 'recoger' | 'pendiente' | 'casa' | 'compras' | 'date' | 'cumple';
+type RecurringType = 'none' | 'weekly' | 'monthly' | 'yearly';
 
 const CATEGORIES = [
-  { value: 'pago' as const, label: 'Pago', emoji: '💰', color: 'bg-pastel-pink-100' },
+  { value: 'date' as const, label: 'Date Juntos', emoji: '💕', color: 'bg-pastel-pink-100' },
+  { value: 'pago' as const, label: 'Pago', emoji: '💰', color: 'bg-yellow-100' },
   { value: 'recoger' as const, label: 'Recoger', emoji: '📦', color: 'bg-pastel-blue-100' },
-  { value: 'pendiente' as const, label: 'Pendiente', emoji: '✏️', color: 'bg-yellow-100' },
+  { value: 'pendiente' as const, label: 'Pendiente', emoji: '✏️', color: 'bg-orange-100' },
   { value: 'casa' as const, label: 'Casa', emoji: '🏠', color: 'bg-pastel-green-100' },
   { value: 'compras' as const, label: 'Compras', emoji: '🛒', color: 'bg-purple-100' },
+  { value: 'cumple' as const, label: 'Cumpleaños', emoji: '🎂', color: 'bg-pink-200' },
 ];
 
 const RECURRING_OPTIONS = [
   { value: 'none' as const, label: 'Una vez' },
   { value: 'weekly' as const, label: 'Semanal' },
   { value: 'monthly' as const, label: 'Mensual' },
+  { value: 'yearly' as const, label: 'Anual' },
 ];
 
+// Cumpleaños fijos
+const BIRTHDAYS = [
+  { name: 'Amanda', date: '11-17', emoji: '🎂👩' },
+  { name: 'Mau', date: '07-11', emoji: '🎂👨' },
+];
+
+function getNextBirthday(monthDay: string): string {
+  const [month, day] = monthDay.split('-').map(Number);
+  const today = new Date();
+  const thisYear = today.getFullYear();
+  
+  let birthdayDate = new Date(thisYear, month - 1, day);
+  
+  if (birthdayDate < today) {
+    birthdayDate = new Date(thisYear + 1, month - 1, day);
+  }
+  
+  return birthdayDate.toISOString().split('T')[0];
+}
+
+function getDaysUntil(dateStr: string): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr);
+  const diff = target.getTime() - today.getTime();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
 export default function CalendarioPage() {
-  const { memberSlot, displayName, partnerName } = useAuthStore();
+  const { memberSlot } = useAuthStore();
   const {
     addActivity,
     completeActivity,
@@ -40,10 +71,9 @@ export default function CalendarioPage() {
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<ActivityCategory>('pendiente');
+  const [category, setCategory] = useState<ActivityCategory>('date');
   const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueTime, setDueTime] = useState('');
-  const [assignedTo, setAssignedTo] = useState<'MEMBER_A' | 'MEMBER_B' | ''>('');
   const [recurring, setRecurring] = useState<RecurringType>('none');
 
   const pendingActivities = getPendingActivities();
@@ -58,23 +88,22 @@ export default function CalendarioPage() {
       category,
       due_date: dueDate,
       due_time: dueTime || undefined,
-      assigned_to: assignedTo || undefined,
+      assigned_to: undefined,
       created_by: memberSlot,
-      recurring,
+      recurring: recurring === 'yearly' ? 'monthly' : recurring, // yearly se maneja como monthly por ahora
     });
 
     setTitle('');
     setDescription('');
-    setCategory('pendiente');
+    setCategory('date');
     setDueDate(new Date().toISOString().split('T')[0]);
     setDueTime('');
-    setAssignedTo('');
     setRecurring('none');
     setShowForm(false);
   };
 
   const getCategoryInfo = (cat: string) => {
-    return CATEGORIES.find((c) => c.value === cat) || CATEGORIES[2];
+    return CATEGORIES.find((c) => c.value === cat) || CATEGORIES[0];
   };
 
   const formatDate = (dateStr: string) => {
@@ -96,14 +125,40 @@ export default function CalendarioPage() {
     });
   };
 
-  const getMemberName = (slot?: 'MEMBER_A' | 'MEMBER_B') => {
-    if (!slot) return null;
-    return slot === memberSlot ? displayName : partnerName;
-  };
-
   return (
     <AppLayout title="Calendario">
       <div className="page-container space-y-6">
+        {/* Cumpleaños */}
+        <Card className="p-4 bg-gradient-to-r from-pastel-pink-50 to-pastel-blue-50">
+          <h3 className="font-semibold mb-3 flex items-center gap-2">
+            🎂 Cumpleaños
+          </h3>
+          <div className="space-y-2">
+            {BIRTHDAYS.map((bday) => {
+              const nextDate = getNextBirthday(bday.date);
+              const daysUntil = getDaysUntil(nextDate);
+              return (
+                <div key={bday.name} className="flex items-center justify-between py-2">
+                  <div className="flex items-center gap-2">
+                    <span>{bday.emoji}</span>
+                    <span className="font-medium">{bday.name}</span>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-gray-600">{formatDate(nextDate)}</p>
+                    {daysUntil === 0 ? (
+                      <p className="text-xs text-pastel-pink-400 font-bold">¡HOY! 🎉</p>
+                    ) : daysUntil <= 7 ? (
+                      <p className="text-xs text-pastel-pink-400">En {daysUntil} días</p>
+                    ) : (
+                      <p className="text-xs text-gray-400">En {daysUntil} días</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
@@ -142,7 +197,7 @@ export default function CalendarioPage() {
             <div>
               <label className="text-sm text-gray-600 mb-2 block">Categoría</label>
               <div className="flex flex-wrap gap-2">
-                {CATEGORIES.map((cat) => (
+                {CATEGORIES.filter(c => c.value !== 'cumple').map((cat) => (
                   <button
                     key={cat.value}
                     onClick={() => setCategory(cat.value)}
@@ -180,56 +235,16 @@ export default function CalendarioPage() {
               </div>
             </div>
 
-            {/* Assign to */}
-            <div>
-              <label className="text-sm text-gray-600 mb-2 block">Asignar a</label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setAssignedTo('')}
-                  className={cn(
-                    'px-3 py-2 rounded-lg text-sm flex-1 transition-all',
-                    assignedTo === ''
-                      ? 'bg-pastel-blue-100 ring-2 ring-pastel-blue-300'
-                      : 'bg-gray-100'
-                  )}
-                >
-                  👫 Ambos
-                </button>
-                <button
-                  onClick={() => setAssignedTo('MEMBER_A')}
-                  className={cn(
-                    'px-3 py-2 rounded-lg text-sm flex-1 transition-all',
-                    assignedTo === 'MEMBER_A'
-                      ? 'bg-pastel-pink-100 ring-2 ring-pastel-pink-300'
-                      : 'bg-gray-100'
-                  )}
-                >
-                  {memberSlot === 'MEMBER_A' ? displayName : partnerName}
-                </button>
-                <button
-                  onClick={() => setAssignedTo('MEMBER_B')}
-                  className={cn(
-                    'px-3 py-2 rounded-lg text-sm flex-1 transition-all',
-                    assignedTo === 'MEMBER_B'
-                      ? 'bg-pastel-green-100 ring-2 ring-pastel-green-300'
-                      : 'bg-gray-100'
-                  )}
-                >
-                  {memberSlot === 'MEMBER_B' ? displayName : partnerName}
-                </button>
-              </div>
-            </div>
-
             {/* Recurring */}
             <div>
               <label className="text-sm text-gray-600 mb-2 block">Repetir</label>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 {RECURRING_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
                     onClick={() => setRecurring(opt.value)}
                     className={cn(
-                      'px-3 py-2 rounded-lg text-sm flex-1 transition-all',
+                      'px-3 py-2 rounded-lg text-sm transition-all',
                       recurring === opt.value
                         ? 'bg-pastel-green-100 ring-2 ring-pastel-green-300'
                         : 'bg-gray-100'
@@ -246,7 +261,7 @@ export default function CalendarioPage() {
               disabled={!title.trim()}
               className="w-full"
             >
-              Guardar actividad
+              Guardar
             </Button>
           </Card>
         )}
@@ -280,11 +295,6 @@ export default function CalendarioPage() {
                         <p className="font-medium mt-1">{activity.title}</p>
                         {activity.description && (
                           <p className="text-sm text-gray-600 mt-0.5">{activity.description}</p>
-                        )}
-                        {activity.assigned_to && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            → {getMemberName(activity.assigned_to)}
-                          </p>
                         )}
                       </div>
                       <button
@@ -328,18 +338,13 @@ export default function CalendarioPage() {
                             </span>
                             {activity.recurring !== 'none' && (
                               <span className="text-xs text-pastel-blue-400">
-                                🔄 {activity.recurring === 'weekly' ? 'Semanal' : 'Mensual'}
+                                🔄
                               </span>
                             )}
                           </div>
                           <p className="font-medium mt-1">{activity.title}</p>
                           {activity.description && (
                             <p className="text-sm text-gray-600 mt-0.5">{activity.description}</p>
-                          )}
-                          {activity.assigned_to && (
-                            <p className="text-xs text-gray-500 mt-1">
-                              → {getMemberName(activity.assigned_to)}
-                            </p>
                           )}
                         </div>
                         <button
@@ -360,7 +365,7 @@ export default function CalendarioPage() {
               <p className="text-4xl mb-2">📅</p>
               <p className="text-gray-500">No hay actividades pendientes</p>
               <p className="text-sm text-gray-400 mt-1">
-                Agrega pagos, pendientes o tareas del hogar
+                Agrega un date, pago o pendiente
               </p>
             </div>
           )
