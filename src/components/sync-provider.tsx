@@ -10,24 +10,34 @@ import { useActivitiesStore } from '@/stores/activities-store';
 import { isSupabaseConfigured } from '@/lib/supabase';
 
 export function SyncProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, instanceId, isOnline, setOnline } = useAuthStore();
-  
+  const { hasHydrated, isAuthenticated, instanceId, isOnline, setOnline, finishHydration, reconcileInstance } =
+    useAuthStore();
+
   const plansSubscribe = usePlansStore((s) => s.subscribeToChanges);
   const plansFetch = usePlansStore((s) => s.fetchFromSupabase);
-  
+
   const moodsSubscribe = useMoodStore((s) => s.subscribeToChanges);
   const moodsFetch = useMoodStore((s) => s.fetchFromSupabase);
-  
+  const pruneMoods = useMoodStore((s) => s.pruneOldMoods);
+
   const memoriesSubscribe = useMemoriesStore((s) => s.subscribeToChanges);
   const memoriesFetch = useMemoriesStore((s) => s.fetchFromSupabase);
-  
+
   const sparksSubscribe = useSparkStore((s) => s.subscribeToChanges);
   const sparksFetch = useSparkStore((s) => s.fetchFromSupabase);
-  
+
   const activitiesSubscribe = useActivitiesStore((s) => s.subscribeToChanges);
   const activitiesFetch = useActivitiesStore((s) => s.fetchFromSupabase);
 
-  // Monitor online status
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (!useAuthStore.getState().hasHydrated) {
+        finishHydration();
+      }
+    }, 600);
+    return () => clearTimeout(timeout);
+  }, [finishHydration]);
+
   useEffect(() => {
     const handleOnline = () => setOnline(true);
     const handleOffline = () => setOnline(false);
@@ -41,18 +51,24 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     };
   }, [setOnline]);
 
-  // Sync when authenticated and online (only if Supabase is configured)
   useEffect(() => {
-    if (!isAuthenticated || !instanceId || !isOnline || !isSupabaseConfigured()) return;
+    pruneMoods();
+    if (hasHydrated && isAuthenticated) {
+      reconcileInstance();
+    }
+  }, [hasHydrated, isAuthenticated, pruneMoods, reconcileInstance]);
 
-    // Initial fetch
+  useEffect(() => {
+    if (!hasHydrated || !isAuthenticated || !instanceId || !isOnline || !isSupabaseConfigured()) {
+      return;
+    }
+
     plansFetch();
     moodsFetch();
     memoriesFetch();
     sparksFetch();
     activitiesFetch();
 
-    // Subscribe to real-time changes
     const unsubscribers = [
       plansSubscribe(),
       moodsSubscribe(),
@@ -61,10 +77,20 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       activitiesSubscribe(),
     ];
 
+    const poll = setInterval(() => {
+      plansFetch();
+      moodsFetch();
+      memoriesFetch();
+      sparksFetch();
+      activitiesFetch();
+    }, 5000);
+
     return () => {
       unsubscribers.forEach((unsub) => unsub());
+      clearInterval(poll);
     };
   }, [
+    hasHydrated,
     isAuthenticated,
     instanceId,
     isOnline,

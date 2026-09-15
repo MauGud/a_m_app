@@ -5,74 +5,80 @@ import Link from 'next/link';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { SectionIntro } from '@/components/ui/section-intro';
 import { useMemoriesStore } from '@/stores/memories-store';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatDateTime } from '@/lib/utils';
+import { mapsUrl } from '@/lib/geo';
 
 export default function RecuerdosPage() {
-  const { getMemories, deleteMemory } = useMemoriesStore();
-  const memories = getMemories();
-  
+  const memories = useMemoriesStore((s) => s.memories);
+  const deleteMemory = useMemoriesStore((s) => s.deleteMemory);
+  const sorted = [...memories].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selectedMemory = memories.find((m) => m.id === selectedId);
+  const selectedMemory = sorted.find((m) => m.id === selectedId);
 
   return (
     <AppLayout title="Recuerdos">
-      <div className="page-container">
-        {memories.length === 0 ? (
-          <div className="empty-state min-h-[60vh]">
+      <div className="page-container space-y-6">
+        <SectionIntro emoji="📸" title="Su álbum a dos cámaras">
+          Cada recuerdo guarda la fecha y el lugar. Las fotos de esta sección también viven en la
+          galería del teléfono, para que el instante no se quede solo aquí.
+        </SectionIntro>
+
+        <div className="text-center">
+          <Link href="/recuerdos/nuevo">
+            <Button>Capturar recuerdo</Button>
+          </Link>
+        </div>
+
+        {sorted.length === 0 ? (
+          <div className="empty-state min-h-[40vh]">
             <span className="text-6xl mb-4">📷</span>
             <p className="text-gray-500 mb-2">No hay recuerdos aún</p>
-            <p className="text-sm text-gray-400 mb-6">
+            <p className="text-sm text-gray-400">
               Capturen su primer momento juntos
             </p>
-            <Link href="/camara">
-              <Button>Crear recuerdo</Button>
-            </Link>
           </div>
         ) : (
-          <>
-            {/* Gallery Grid */}
-            <div className="grid grid-cols-2 gap-3">
-              {memories.map((memory) => (
-                <button
-                  key={memory.id}
-                  onClick={() => setSelectedId(memory.id)}
-                  className="relative aspect-square rounded-xl overflow-hidden group"
-                >
-                  <img
-                    src={memory.image_back}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="absolute bottom-2 left-2 right-2">
-                      <p className="text-white text-xs truncate">
-                        {memory.caption || formatDate(memory.created_at)}
+          <div className="grid grid-cols-2 gap-3">
+            {sorted.map((memory) => (
+              <button
+                key={memory.id}
+                onClick={() => setSelectedId(memory.id)}
+                className="relative aspect-square rounded-xl overflow-hidden group text-left"
+              >
+                <img
+                  src={memory.image_back}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent">
+                  <div className="absolute bottom-2 left-2 right-2">
+                    <p className="text-white text-xs truncate">
+                      {formatDate(memory.created_at)}
+                    </p>
+                    {memory.location?.address && (
+                      <p className="text-white/80 text-[10px] truncate">
+                        📍 {memory.location.address}
                       </p>
-                    </div>
+                    )}
                   </div>
-                  {/* Small front image overlay */}
-                  <div className="absolute top-2 right-2 w-10 h-10 rounded-lg overflow-hidden border-2 border-white shadow-sm">
-                    <img
-                      src={memory.image_front}
-                      alt=""
-                      className="w-full h-full object-cover scale-x-[-1]"
-                    />
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            {/* Add more button */}
-            <div className="mt-6 text-center">
-              <Link href="/camara">
-                <Button variant="secondary">+ Nuevo recuerdo</Button>
-              </Link>
-            </div>
-          </>
+                </div>
+                <div className="absolute top-2 right-2 w-10 h-10 rounded-lg overflow-hidden border-2 border-white shadow-sm">
+                  <img
+                    src={memory.image_front}
+                    alt=""
+                    className="w-full h-full object-cover scale-x-[-1]"
+                  />
+                </div>
+              </button>
+            ))}
+          </div>
         )}
 
-        {/* Detail Modal */}
         {selectedMemory && (
           <div
             className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
@@ -83,7 +89,6 @@ export default function RecuerdosPage() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-4 space-y-4">
-                {/* Images */}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <p className="text-xs text-gray-500 mb-1">Lo que vieron</p>
@@ -103,22 +108,26 @@ export default function RecuerdosPage() {
                   </div>
                 </div>
 
-                {/* Details */}
                 <div>
                   <p className="text-sm text-gray-500">
-                    {formatDate(selectedMemory.created_at)}
+                    📅 {formatDateTime(selectedMemory.created_at)}
                   </p>
                   {selectedMemory.caption && (
                     <p className="text-gray-800 mt-2">{selectedMemory.caption}</p>
                   )}
                   {selectedMemory.location && (
-                    <p className="text-sm text-gray-500 mt-2 flex items-center gap-1">
-                      📍 {selectedMemory.location.latitude.toFixed(4)}, {selectedMemory.location.longitude.toFixed(4)}
-                    </p>
+                    <a
+                      href={mapsUrl(selectedMemory.location.latitude, selectedMemory.location.longitude)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm text-pastel-blue-400 mt-2 flex items-center gap-1 hover:underline"
+                    >
+                      📍 {selectedMemory.location.address ||
+                        `${selectedMemory.location.latitude.toFixed(4)}, ${selectedMemory.location.longitude.toFixed(4)}`}
+                    </a>
                   )}
                 </div>
 
-                {/* Actions */}
                 <div className="flex gap-2 pt-2">
                   <Button
                     variant="ghost"

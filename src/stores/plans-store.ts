@@ -160,9 +160,10 @@ export const usePlansStore = create<PlansState>()(
             const { data, error } = await client
               .from('plans')
               .select('*')
+              .eq('instance_id', auth.instanceId)
               .order('created_at', { ascending: false });
 
-            if (!error && data) {
+            if (!error && data && data.length > 0) {
               const plans: Plan[] = data.map((d: DbPlan) => ({
                 id: d.id,
                 title: d.title,
@@ -187,7 +188,7 @@ export const usePlansStore = create<PlansState>()(
         if (!auth.instanceId || !isSupabaseConfigured() || !supabase) return () => {};
 
         const channel = supabase
-          .channel('plans-changes')
+          .channel(`plans-changes-${auth.instanceId}`)
           .on(
             'postgres_changes',
             {

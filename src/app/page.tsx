@@ -3,38 +3,53 @@
 import Link from 'next/link';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Card } from '@/components/ui/card';
+import { SectionIntro } from '@/components/ui/section-intro';
 import { useAuthStore } from '@/stores/auth-store';
 import { useMoodStore } from '@/stores/mood-store';
-import { usePlansStore } from '@/stores/plans-store';
 import { useMemoriesStore } from '@/stores/memories-store';
 import { useActivitiesStore } from '@/stores/activities-store';
-import { getMoodEmoji, getMoodLabel } from '@/lib/utils';
+import { getMoodEmoji, getMoodLabel, getTodayISO } from '@/lib/utils';
+import { MEMBER_NAMES, getCategoryInfo, DATE_GOAL_CATEGORIES } from '@/lib/constants';
 
 export default function HomePage() {
   const { memberSlot } = useAuthStore();
-  const { getTodayMood, getPartnerTodayMood } = useMoodStore();
-  const { getPendingPlans } = usePlansStore();
-  const { memories } = useMemoriesStore();
-  const { getUpcomingActivities, getOverdueActivities } = useActivitiesStore();
+  const moods = useMoodStore((s) => s.moods);
+  const memories = useMemoriesStore((s) => s.memories);
+  const activities = useActivitiesStore((s) => s.activities);
+  const getUpcomingActivities = useActivitiesStore((s) => s.getUpcomingActivities);
+  const getOverdueActivities = useActivitiesStore((s) => s.getOverdueActivities);
 
-  const myMood = memberSlot ? getTodayMood(memberSlot) : undefined;
-  const partnerMood = memberSlot ? getPartnerTodayMood(memberSlot) : undefined;
-  const pendingPlans = getPendingPlans();
+  const myName = memberSlot === 'MEMBER_A' ? MEMBER_NAMES.MEMBER_A : MEMBER_NAMES.MEMBER_B;
+  const partnerName = memberSlot === 'MEMBER_A' ? MEMBER_NAMES.MEMBER_B : MEMBER_NAMES.MEMBER_A;
+  const todayISO = getTodayISO();
+  const myMood = memberSlot
+    ? moods.find((m) => m.member === memberSlot && m.date === todayISO)
+    : undefined;
+  const partnerSlot = memberSlot === 'MEMBER_A' ? 'MEMBER_B' : 'MEMBER_A';
+  const partnerMood = memberSlot
+    ? moods.find((m) => m.member === partnerSlot && m.date === todayISO)
+    : undefined;
+  const pendingDates = activities.filter(
+    (a) => DATE_GOAL_CATEGORIES.includes(a.category) && a.status === 'pending'
+  );
   const upcomingActivities = getUpcomingActivities(7);
   const overdueActivities = getOverdueActivities();
 
   return (
     <AppLayout title="Inicio">
       <div className="page-container space-y-6">
-        {/* Greeting */}
-        <div className="text-center py-4">
+        <SectionIntro emoji="🏠" title="Su espacio, al mismo tiempo">
+          Todo lo que uno agrega —un mood, un date, un spark, un recuerdo— llega al otro en tiempo
+          real. Aquí se cuida la magia de estar juntos.
+        </SectionIntro>
+
+        <div className="text-center py-2">
           <h2 className="text-2xl font-bold text-gray-800">
-            Hola, {memberSlot === 'MEMBER_A' ? 'Amanda' : 'Mau'} 💕
+            Hola, {myName} 💕
           </h2>
           <p className="text-gray-600">¿Cómo estamos hoy?</p>
         </div>
 
-        {/* Mood Section */}
         <Card className="p-4">
           <h3 className="font-semibold mb-3 flex items-center gap-2">
             😊 Estado de ánimo
@@ -42,7 +57,7 @@ export default function HomePage() {
           <div className="grid grid-cols-2 gap-4">
             <Link href="/mood" className="block">
               <div className="text-center p-3 rounded-xl bg-pastel-pink-50 hover:bg-pastel-pink-100 transition-all">
-                <p className="text-sm text-gray-600 mb-1">{memberSlot === 'MEMBER_A' ? 'Amanda' : 'Mau'}</p>
+                <p className="text-sm text-gray-600 mb-1">{myName}</p>
                 {myMood ? (
                   <>
                     <span className="text-3xl">{getMoodEmoji(myMood.value)}</span>
@@ -54,7 +69,7 @@ export default function HomePage() {
               </div>
             </Link>
             <div className="text-center p-3 rounded-xl bg-pastel-green-50">
-              <p className="text-sm text-gray-600 mb-1">{memberSlot === 'MEMBER_A' ? 'Mau' : 'Amanda'}</p>
+              <p className="text-sm text-gray-600 mb-1">{partnerName}</p>
               {partnerMood ? (
                 <>
                   <span className="text-3xl">{getMoodEmoji(partnerMood.value)}</span>
@@ -67,14 +82,13 @@ export default function HomePage() {
           </div>
         </Card>
 
-        {/* Quick Stats */}
         <div className="grid grid-cols-2 gap-4">
-          <Link href="/planes">
+          <Link href="/dates">
             <Card className="p-4 hover:shadow-md transition-all">
               <div className="text-center">
-                <span className="text-2xl">📋</span>
-                <p className="text-2xl font-bold text-gray-800 mt-1">{pendingPlans.length}</p>
-                <p className="text-sm text-gray-600">Planes pendientes</p>
+                <span className="text-2xl">💕</span>
+                <p className="text-2xl font-bold text-gray-800 mt-1">{pendingDates.length}</p>
+                <p className="text-sm text-gray-600">Dates y metas</p>
               </div>
             </Card>
           </Link>
@@ -89,7 +103,6 @@ export default function HomePage() {
           </Link>
         </div>
 
-        {/* Activities Alert */}
         {(overdueActivities.length > 0 || upcomingActivities.length > 0) && (
           <Link href="/calendario">
             <Card className={`p-4 ${overdueActivities.length > 0 ? 'border-red-200 bg-red-50/50' : ''}`}>
@@ -101,18 +114,15 @@ export default function HomePage() {
                   </span>
                 )}
               </h3>
-              {upcomingActivities.slice(0, 3).map((activity) => (
-                <div key={activity.id} className="text-sm text-gray-600 py-1 border-b border-gray-100 last:border-0">
-                  <span className="mr-2">
-                    {activity.category === 'pago' && '💰'}
-                    {activity.category === 'recoger' && '📦'}
-                    {activity.category === 'pendiente' && '✏️'}
-                    {activity.category === 'casa' && '🏠'}
-                    {activity.category === 'compras' && '🛒'}
-                  </span>
-                  {activity.title}
-                </div>
-              ))}
+              {upcomingActivities.slice(0, 3).map((activity) => {
+                const cat = getCategoryInfo(activity.category);
+                return (
+                  <div key={activity.id} className="text-sm text-gray-600 py-1 border-b border-gray-100 last:border-0">
+                    <span className="mr-2">{cat.emoji}</span>
+                    {activity.title}
+                  </div>
+                );
+              })}
               {upcomingActivities.length === 0 && overdueActivities.length === 0 && (
                 <p className="text-sm text-gray-500">Sin actividades próximas</p>
               )}
@@ -120,17 +130,16 @@ export default function HomePage() {
           </Link>
         )}
 
-        {/* Quick Actions */}
         <div className="grid grid-cols-2 gap-4">
           <Link href="/spark">
             <Card className="p-4 bg-gradient-to-br from-pastel-pink-50 to-pastel-blue-50 hover:shadow-md transition-all">
               <div className="text-center">
-                <span className="text-2xl">💕</span>
+                <span className="text-2xl">✨</span>
                 <p className="text-sm font-medium text-gray-800 mt-1">Spark del día</p>
               </div>
             </Card>
           </Link>
-          <Link href="/camara">
+          <Link href="/recuerdos/nuevo">
             <Card className="p-4 bg-gradient-to-br from-pastel-green-50 to-pastel-blue-50 hover:shadow-md transition-all">
               <div className="text-center">
                 <span className="text-2xl">📸</span>

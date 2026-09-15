@@ -2,10 +2,10 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase, DbMemory, uploadImage, isSupabaseConfigured } from '@/lib/supabase';
 import { useAuthStore } from './auth-store';
+import { mergeById } from '@/lib/merge';
+import type { MemberSlot } from '@/lib/constants';
 
-type MemberSlot = 'MEMBER_A' | 'MEMBER_B';
-
-interface Memory {
+export interface Memory {
   id: string;
   image_front: string;
   image_back: string;
@@ -22,11 +22,11 @@ interface Memory {
 interface MemoriesState {
   memories: Memory[];
   isLoading: boolean;
-  
+
   addMemory: (memory: Omit<Memory, 'id' | 'created_at'>) => Promise<void>;
   deleteMemory: (id: string) => Promise<void>;
   getMemories: () => Memory[];
-  
+
   fetchFromSupabase: () => Promise<void>;
   subscribeToChanges: () => () => void;
 }
@@ -43,49 +43,42 @@ export const useMemoriesStore = create<MemoriesState>()(
           id: crypto.randomUUID(),
           created_at: new Date().toISOString(),
         };
-        
-        // Add locally first
+
         set((state) => ({
           memories: [newMemory, ...state.memories],
         }));
 
-        // Upload to Supabase
         const auth = useAuthStore.getState();
         if (auth.instanceId && auth.isOnline) {
-          try {
-            // Upload images to storage
-            const timestamp = Date.now();
-            const frontUrl = await uploadImage(
-              'memories',
-              memory.image_front,
-              `${auth.instanceId}/${timestamp}_front.jpg`
-            );
-            const backUrl = await uploadImage(
-              'memories',
-              memory.image_back,
-              `${auth.instanceId}/${timestamp}_back.jpg`
-            );
+          void (async () => {
+            try {
+              const timestamp = Date.now();
+              const [frontUrl, backUrl] = await Promise.all([
+                uploadImage('memories', memory.image_front, `${auth.instanceId}/${timestamp}_front.jpg`),
+                uploadImage('memories', memory.image_back, `${auth.instanceId}/${timestamp}_back.jpg`),
+              ]);
 
-            if (frontUrl && backUrl) {
-              const client = auth.getSupabase();
-              if (client) {
-                await client.from('memories').insert({
-                  id: newMemory.id,
-                  instance_id: auth.instanceId,
-                  image_front_url: frontUrl,
-                  image_back_url: backUrl,
-                  caption: memory.caption || null,
-                  latitude: memory.location?.latitude || null,
-                  longitude: memory.location?.longitude || null,
-                  address: memory.location?.address || null,
-                  created_by: memory.created_by,
-                  created_at: newMemory.created_at,
-                });
+              if (frontUrl && backUrl) {
+                const client = auth.getSupabase();
+                if (client) {
+                  await client.from('memories').insert({
+                    id: newMemory.id,
+                    instance_id: auth.instanceId,
+                    image_front_url: frontUrl,
+                    image_back_url: backUrl,
+                    caption: memory.caption || null,
+                    latitude: memory.location?.latitude || null,
+                    longitude: memory.location?.longitude || null,
+                    address: memory.location?.address || null,
+                    created_by: memory.created_by,
+                    created_at: newMemory.created_at,
+                  });
+                }
               }
+            } catch (err) {
+              console.warn('Could not sync memory:', err);
             }
-          } catch (err) {
-            console.warn('Could not sync memory:', err);
-          }
+          })();
         }
       },
 
@@ -124,23 +117,27 @@ export const useMemoriesStore = create<MemoriesState>()(
             const { data, error } = await client
               .from('memories')
               .select('*')
+              .eq('instance_id', auth.instanceId)
               .order('created_at', { ascending: false });
 
             if (!error && data) {
-              const memories: Memory[] = data.map((d: DbMemory) => ({
+              const remote: Memory[] = data.map((d: DbMemory) => ({
                 id: d.id,
                 image_front: d.image_front_url,
                 image_back: d.image_back_url,
                 caption: d.caption || undefined,
-                location: d.latitude && d.longitude ? {
-                  latitude: d.latitude,
-                  longitude: d.longitude,
-                  address: d.address || undefined,
-                } : undefined,
+                location:
+                  d.latitude && d.longitude
+                    ? {
+                        latitude: Number(d.latitude),
+                        longitude: Number(d.longitude),
+                        address: d.address || undefined,
+                      }
+                    : undefined,
                 created_by: d.created_by,
                 created_at: d.created_at,
               }));
-              set({ memories });
+              set({ memories: mergeById(get().memories, remote) });
             }
           }
         } catch (err) {
@@ -155,7 +152,7 @@ export const useMemoriesStore = create<MemoriesState>()(
         if (!auth.instanceId || !isSupabaseConfigured() || !supabase) return () => {};
 
         const channel = supabase
-          .channel('memories-changes')
+          .channel(`memories-changes-${auth.instanceId}`)
           .on(
             'postgres_changes',
             {
@@ -177,6 +174,7 @@ export const useMemoriesStore = create<MemoriesState>()(
     }),
     {
       name: 'espacio-pareja-memories',
+      partialize: (state) => ({ memories: state.memories }),
     }
   )
 );

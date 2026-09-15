@@ -9,8 +9,16 @@ export function generateUUID(): string {
   return crypto.randomUUID();
 }
 
+export function parseLocalDate(date: string | Date): Date {
+  if (date instanceof Date) return date;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return new Date(`${date}T12:00:00`);
+  }
+  return new Date(date);
+}
+
 export function formatDate(date: string | Date): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
+  const d = parseLocalDate(date);
   return d.toLocaleDateString('es-MX', {
     day: 'numeric',
     month: 'short',
@@ -18,8 +26,76 @@ export function formatDate(date: string | Date): string {
   });
 }
 
-export function getTodayISO(): string {
-  return new Date().toISOString().split('T')[0];
+export function formatDateTime(date: string | Date): string {
+  const d = parseLocalDate(date);
+  return d.toLocaleString('es-MX', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+export function getLocalISODate(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export function getTodayISO(date: Date = new Date()): string {
+  return getLocalISODate(date);
+}
+
+export function daysAgoISO(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return getLocalISODate(date);
+}
+
+function addCalendarMonths(date: Date, months: number, anchorDay?: number): Date {
+  const day = anchorDay ?? date.getDate();
+  const next = new Date(date);
+  next.setDate(1);
+  next.setMonth(next.getMonth() + months);
+  const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+  next.setDate(Math.min(day, lastDay));
+  return next;
+}
+
+export function getNextDueDate(
+  dueDate: string,
+  recurring: 'none' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly' | 'custom',
+  interval = 1,
+  unit: 'day' | 'week' | 'month' | 'year' = 'day',
+  anchorDay?: number
+): string | null {
+  if (recurring === 'none') return null;
+
+  const current = parseLocalDate(dueDate);
+  const day = anchorDay ?? current.getDate();
+  let next = new Date(current);
+
+  if (recurring === 'daily') {
+    next.setDate(next.getDate() + 1);
+  } else if (recurring === 'weekly') {
+    next.setDate(next.getDate() + 7);
+  } else if (recurring === 'biweekly') {
+    next.setDate(next.getDate() + 14);
+  } else if (recurring === 'monthly') {
+    next = addCalendarMonths(current, 1, day);
+  } else if (recurring === 'yearly') {
+    next = addCalendarMonths(current, 12, day);
+  } else if (recurring === 'custom') {
+    const step = Math.max(1, interval);
+    if (unit === 'day') next.setDate(next.getDate() + step);
+    else if (unit === 'week') next.setDate(next.getDate() + step * 7);
+    else if (unit === 'month') next = addCalendarMonths(current, step, day);
+    else if (unit === 'year') next = addCalendarMonths(current, step * 12, day);
+  }
+
+  return getLocalISODate(next);
 }
 
 export const MOOD_CONFIG = {

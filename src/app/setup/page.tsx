@@ -1,40 +1,68 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { useAuthStore } from '@/stores/auth-store';
 import { cn } from '@/lib/utils';
+import { MEMBER_NAMES, type MemberSlot } from '@/lib/constants';
 
 type Step = 'member' | 'secret';
 
 export default function SetupPage() {
   const router = useRouter();
-  const { setupInstance, selectMember, setSecret, isAuthenticated } = useAuthStore();
-  
+  const { selectMember, verifySecret, isAuthenticated, hasHydrated, memberSlot, displayName } =
+    useAuthStore();
+
   const [step, setStep] = useState<Step>('member');
-  const [selectedMember, setSelectedMember] = useState<'MEMBER_A' | 'MEMBER_B' | null>(null);
+  const [selectedMember, setSelectedMember] = useState<MemberSlot | null>(memberSlot);
   const [secretInput, setSecretInput] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (hasHydrated && isAuthenticated) {
+      router.push('/');
+    }
+  }, [hasHydrated, isAuthenticated, router]);
+
+  useEffect(() => {
+    if (hasHydrated && memberSlot && !isAuthenticated) {
+      setSelectedMember(memberSlot);
+      setStep('secret');
+    }
+  }, [hasHydrated, memberSlot, isAuthenticated]);
+
+  if (!hasHydrated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-pulse text-2xl">💕</div>
+      </div>
+    );
+  }
 
   if (isAuthenticated) {
-    router.push('/');
     return null;
   }
 
-  const handleMemberSelect = (slot: 'MEMBER_A' | 'MEMBER_B') => {
-    // Hardcoded: Amanda es MEMBER_A, Mau es MEMBER_B
-    setupInstance({ memberA: 'Amanda', memberB: 'Mau' });
+  const handleMemberSelect = (slot: MemberSlot) => {
     setSelectedMember(slot);
     selectMember(slot);
+    setError('');
     setStep('secret');
   };
 
-  const handleSecretSubmit = () => {
-    if (secretInput.trim().length >= 4) {
-      setSecret(secretInput.trim());
+  const handleSecretSubmit = async () => {
+    setError('');
+    setSubmitting(true);
+    const ok = await verifySecret(secretInput.trim());
+    setSubmitting(false);
+    if (ok) {
       router.push('/');
+    } else {
+      setError('Código incorrecto');
     }
   };
 
@@ -46,15 +74,17 @@ export default function SetupPage() {
           <p className="text-gray-600">Nuestro espacio privado</p>
         </div>
 
-        {/* Progress */}
         <div className="flex justify-center gap-2 mb-8">
           {['member', 'secret'].map((s, i) => (
             <div
               key={s}
               className={cn(
                 'w-3 h-3 rounded-full transition-all',
-                step === s ? 'bg-pastel-pink-200 scale-125' : 
-                ['member', 'secret'].indexOf(step) > i ? 'bg-pastel-green-200' : 'bg-gray-200'
+                step === s
+                  ? 'bg-pastel-pink-200 scale-125'
+                  : ['member', 'secret'].indexOf(step) > i
+                    ? 'bg-pastel-green-200'
+                    : 'bg-gray-200'
               )}
             />
           ))}
@@ -74,7 +104,7 @@ export default function SetupPage() {
                   )}
                 >
                   <span className="text-3xl mb-2 block">👩</span>
-                  <span className="font-medium">Amanda</span>
+                  <span className="font-medium">{MEMBER_NAMES.MEMBER_A}</span>
                 </button>
                 <button
                   onClick={() => handleMemberSelect('MEMBER_B')}
@@ -85,7 +115,7 @@ export default function SetupPage() {
                   )}
                 >
                   <span className="text-3xl mb-2 block">👨</span>
-                  <span className="font-medium">Mau</span>
+                  <span className="font-medium">{MEMBER_NAMES.MEMBER_B}</span>
                 </button>
               </div>
             </div>
@@ -93,24 +123,47 @@ export default function SetupPage() {
 
           {step === 'secret' && (
             <div className="space-y-4">
-              <h2 className="text-xl font-semibold text-center mb-4">Código secreto</h2>
-              <p className="text-sm text-gray-600 text-center mb-4">
-                El código que solo nosotros conocemos 💕
-              </p>
+              <h2 className="text-xl font-semibold text-center mb-2">Código secreto</h2>
+              {displayName && (
+                <p className="text-sm text-gray-600 text-center">
+                  Hola {displayName} 💕 El código se pide cada 60 días
+                </p>
+              )}
               <Input
                 type="password"
-                placeholder="Mínimo 4 caracteres"
+                inputMode="numeric"
+                placeholder="Código de 4 dígitos"
                 value={secretInput}
                 onChange={(e) => setSecretInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && secretInput.trim().length >= 4) {
+                    handleSecretSubmit();
+                  }
+                }}
                 autoFocus
               />
+              {error && (
+                <p className="text-sm text-red-500 text-center">{error}</p>
+              )}
               <Button
                 onClick={handleSecretSubmit}
-                disabled={secretInput.trim().length < 4}
+                disabled={secretInput.trim().length < 4 || submitting}
                 className="w-full"
               >
-                Entrar 💕
+                {submitting ? 'Entrando...' : 'Entrar 💕'}
               </Button>
+              {memberSlot && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep('member');
+                    setError('');
+                  }}
+                  className="w-full text-sm text-gray-500 hover:text-gray-700"
+                >
+                  No soy {displayName}
+                </button>
+              )}
             </div>
           )}
         </Card>

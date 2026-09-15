@@ -1,142 +1,143 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase, getSupabaseWithInstance, isSupabaseConfigured } from '@/lib/supabase';
-
-type MemberSlot = 'MEMBER_A' | 'MEMBER_B';
+import { COUPLE_SECRET, MEMBER_NAMES, SECRET_TTL_MS, type MemberSlot } from '@/lib/constants';
 
 interface AuthState {
+  hasHydrated: boolean;
   isAuthenticated: boolean;
   instanceId: string | null;
   instanceSecret: string | null;
   memberSlot: MemberSlot | null;
   displayName: string | null;
   partnerName: string | null;
+  lastSecretVerifiedAt: number | null;
   isOnline: boolean;
-  
-  setupInstance: (names: { memberA: string; memberB: string }) => void;
+
   selectMember: (slot: MemberSlot) => void;
-  setSecret: (secret: string) => Promise<void>;
-  loginWithSecret: (secret: string) => Promise<boolean>;
+  verifySecret: (secret: string) => Promise<boolean>;
+  reconcileInstance: () => Promise<void>;
   logout: () => void;
   setOnline: (online: boolean) => void;
   getSupabase: () => ReturnType<typeof getSupabaseWithInstance> | null;
+  finishHydration: () => void;
 }
 
-// Simple hash function for secret (in production, use bcrypt on server)
 async function hashSecret(secret: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(secret + 'espacio-pareja-salt');
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function instanceIdFromHash(hash: string): string {
+  const raw = hash.slice(0, 32);
+  return `${raw.slice(0, 8)}-${raw.slice(8, 12)}-4${raw.slice(13, 16)}-${raw.slice(16, 20)}-${raw.slice(20, 32)}`;
+}
+
+function isSecretFresh(lastSecretVerifiedAt: number | null): boolean {
+  if (!lastSecretVerifiedAt) return false;
+  return Date.now() - lastSecretVerifiedAt < SECRET_TTL_MS;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
+      hasHydrated: false,
       isAuthenticated: false,
       instanceId: null,
       instanceSecret: null,
       memberSlot: null,
       displayName: null,
       partnerName: null,
+      lastSecretVerifiedAt: null,
       isOnline: true,
 
-      setupInstance: (names) => {
-        set({
-          displayName: names.memberA,
-          partnerName: names.memberB,
-        });
-      },
-
       selectMember: (slot) => {
-        const state = get();
         const isA = slot === 'MEMBER_A';
         set({
           memberSlot: slot,
-          displayName: isA ? state.displayName : state.partnerName,
-          partnerName: isA ? state.partnerName : state.displayName,
+          displayName: isA ? MEMBER_NAMES.MEMBER_A : MEMBER_NAMES.MEMBER_B,
+          partnerName: isA ? MEMBER_NAMES.MEMBER_B : MEMBER_NAMES.MEMBER_A,
         });
       },
 
-      setSecret: async (secret) => {
-        const state = get();
+      verifySecret: async (secret) => {
+        if (secret !== COUPLE_SECRET) return false;
+
         const secretHash = await hashSecret(secret);
-        
-        // Try to create instance in Supabase if configured
+        let instanceId = instanceIdFromHash(secretHash);
+        const now = Date.now();
+
         if (isSupabaseConfigured() && supabase) {
           try {
-            const { data, error } = await supabase
+            const { data: existingRows } = await supabase
               .from('instances')
-              .insert({
+              .select('id')
+              .eq('secret_hash', secretHash)
+              .limit(1);
+
+            if (existingRows?.[0]?.id) {
+              instanceId = existingRows[0].id;
+            } else {
+              await supabase.from('instances').upsert({
+                id: instanceId,
                 secret_hash: secretHash,
-                member_a_name: state.memberSlot === 'MEMBER_A' ? state.displayName : state.partnerName,
-                member_b_name: state.memberSlot === 'MEMBER_B' ? state.displayName : state.partnerName,
-              })
-              .select()
-              .single();
-
-            if (error) throw error;
-
-            set({
-              instanceId: data.id,
-              instanceSecret: secret,
-              isAuthenticated: true,
-            });
-            return;
+                member_a_name: MEMBER_NAMES.MEMBER_A,
+                member_b_name: MEMBER_NAMES.MEMBER_B,
+              });
+            }
           } catch (err) {
-            console.warn('Could not create instance in Supabase, using local mode:', err);
+            console.warn('Could not upsert instance in Supabase, using shared local id:', err);
           }
         }
-        
-        // Fallback to local-only mode
+
         set({
-          instanceId: crypto.randomUUID(),
+          instanceId,
           instanceSecret: secret,
+          lastSecretVerifiedAt: now,
           isAuthenticated: true,
         });
+        return true;
       },
 
-      loginWithSecret: async (secret) => {
-        if (!isSupabaseConfigured() || !supabase) {
-          return false;
-        }
-        
-        const secretHash = await hashSecret(secret);
-        
-        try {
-          const { data, error } = await supabase
-            .from('instances')
-            .select('*')
-            .eq('secret_hash', secretHash)
-            .single();
+      reconcileInstance: async () => {
+        const secretHash = await hashSecret(COUPLE_SECRET);
+        let instanceId = instanceIdFromHash(secretHash);
 
-          if (error || !data) {
-            return false;
+        if (isSupabaseConfigured() && supabase) {
+          try {
+            const { data: existingRows } = await supabase
+              .from('instances')
+              .select('id')
+              .eq('secret_hash', secretHash)
+              .limit(1);
+
+            if (existingRows?.[0]?.id) {
+              instanceId = existingRows[0].id;
+            } else {
+              await supabase.from('instances').upsert({
+                id: instanceId,
+                secret_hash: secretHash,
+                member_a_name: MEMBER_NAMES.MEMBER_A,
+                member_b_name: MEMBER_NAMES.MEMBER_B,
+              });
+            }
+          } catch (err) {
+            console.warn('Could not reconcile instance:', err);
           }
+        }
 
-          set({
-            instanceId: data.id,
-            instanceSecret: secret,
-            displayName: data.member_a_name,
-            partnerName: data.member_b_name,
-            isAuthenticated: true,
-          });
-          
-          return true;
-        } catch {
-          return false;
+        if (get().instanceId !== instanceId) {
+          set({ instanceId, instanceSecret: COUPLE_SECRET });
         }
       },
 
       logout: () => {
         set({
           isAuthenticated: false,
-          instanceId: null,
-          instanceSecret: null,
-          memberSlot: null,
-          displayName: null,
-          partnerName: null,
+          lastSecretVerifiedAt: null,
         });
       },
 
@@ -149,9 +150,32 @@ export const useAuthStore = create<AuthState>()(
         if (!instanceId) return null;
         return getSupabaseWithInstance(instanceId);
       },
+
+      finishHydration: () => {
+        const { memberSlot, lastSecretVerifiedAt } = get();
+        set({
+          hasHydrated: true,
+          isAuthenticated: Boolean(memberSlot && isSecretFresh(lastSecretVerifiedAt)),
+        });
+      },
     }),
     {
       name: 'espacio-pareja-auth',
+      partialize: (state) => ({
+        instanceId: state.instanceId,
+        instanceSecret: state.instanceSecret,
+        memberSlot: state.memberSlot,
+        displayName: state.displayName,
+        partnerName: state.partnerName,
+        lastSecretVerifiedAt: state.lastSecretVerifiedAt,
+        isAuthenticated: state.isAuthenticated,
+      }),
+      onRehydrateStorage: () => (state) => {
+        state?.finishHydration();
+        if (!state) {
+          useAuthStore.setState({ hasHydrated: true });
+        }
+      },
     }
   )
 );

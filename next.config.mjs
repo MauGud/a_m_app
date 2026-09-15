@@ -14,7 +14,12 @@ const nextConfig = {
     ],
   },
   
-  // Headers for PWA
+  async redirects() {
+    return [
+      { source: '/planes', destination: '/dates', permanent: false },
+      { source: '/camara', destination: '/recuerdos/nuevo', permanent: false },
+    ];
+  },
   async headers() {
     return [
       {

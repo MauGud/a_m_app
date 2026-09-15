@@ -5,11 +5,13 @@ Aplicación web privada para parejas. Comparte momentos, organiza actividades y 
 ## Características
 
 - 🏠 **Dashboard** - Vista general del estado de la pareja
-- 📋 **Planes** - Bucket list compartida
-- 📅 **Calendario** - Actividades ordinarias (pagos, casa, pendientes)
-- 📸 **Cámara** - Captura dual (lo que ven + ustedes)
-- 💕 **Spark** - Foto diaria simultánea
-- 😊 **Mood** - Estado de ánimo con notas
+- 💕 **Dates y Metas Juntos** - Dates y metas compartidos, sincronizados con el calendario
+- 📅 **Calendario** - Actividades ordinarias con repetición (diario, semanal, mensual, anual, personalizado)
+- 📸 **Recuerdos** - Captura dual (lo que ven + ustedes), con fecha, lugar y guardado a la galería
+- ✨ **Spark** - Foto diaria simultánea
+- 😊 **Mood** - Estado de ánimo con notas (se guarda ~30 días)
+
+## Tecnologías
 
 ## Tecnologías
 
@@ -24,7 +26,7 @@ Aplicación web privada para parejas. Comparte momentos, organiza actividades y 
 ### 1. Configurar Supabase
 
 1. Ve a [supabase.com](https://supabase.com) y abre tu proyecto
-2. Ve a **SQL Editor** y ejecuta el contenido de `supabase-schema.sql`
+2. Ve a **SQL Editor** y ejecuta `supabase-schema.sql` (proyecto nuevo) o `supabase-migration.sql` (proyecto existente). Sin esa migración, el INSERT falla por RLS y los teléfonos no sincronizan.
 3. Ve a **Storage** y crea 2 buckets: `memories` y `sparks` (ambos públicos)
 4. Copia tu URL y anon key de **Settings > API**
 
@@ -65,10 +67,9 @@ src/
 ├── app/                 # Páginas (App Router)
 │   ├── page.tsx        # Home
 │   ├── setup/          # Onboarding
-│   ├── planes/         # Bucket list
+│   ├── dates/          # Dates y Metas Juntos
 │   ├── calendario/     # Actividades
-│   ├── camara/         # Captura dual
-│   ├── recuerdos/      # Galería
+│   ├── recuerdos/      # Galería y captura
 │   ├── spark/          # Foto diaria
 │   └── mood/           # Estado de ánimo
 ├── components/

@@ -2,31 +2,51 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase, DbMood, isSupabaseConfigured } from '@/lib/supabase';
 import { useAuthStore } from './auth-store';
-import { getTodayISO } from '@/lib/utils';
+import { daysAgoISO, getTodayISO } from '@/lib/utils';
+import { MOOD_RETENTION_DAYS, type MemberSlot } from '@/lib/constants';
 
-type MemberSlot = 'MEMBER_A' | 'MEMBER_B';
 type MoodValue = 1 | 2 | 3 | 4 | 5;
 
-interface MoodEntry {
+export interface MoodEntry {
   id: string;
   member: MemberSlot;
   value: MoodValue;
   note?: string;
   date: string;
   created_at: string;
+  updated_at?: string;
 }
 
 interface MoodState {
   moods: MoodEntry[];
   isLoading: boolean;
-  
+
   upsertMood: (member: MemberSlot, value: MoodValue, note?: string) => Promise<void>;
   getTodayMood: (member: MemberSlot) => MoodEntry | undefined;
   getPartnerTodayMood: (mySlot: MemberSlot) => MoodEntry | undefined;
-  getRecentMoods: (member: MemberSlot, days: number) => MoodEntry[];
-  
+  getRecentMoods: (member: MemberSlot, days?: number) => MoodEntry[];
+  pruneOldMoods: () => void;
+
   fetchFromSupabase: () => Promise<void>;
   subscribeToChanges: () => () => void;
+}
+
+function pruneMoods(moods: MoodEntry[]): MoodEntry[] {
+  const cutoff = daysAgoISO(MOOD_RETENTION_DAYS);
+  return moods.filter((m) => m.date >= cutoff);
+}
+
+function mergeMoods(local: MoodEntry[], remote: MoodEntry[]): MoodEntry[] {
+  const map = new Map<string, MoodEntry>();
+  for (const mood of local) map.set(`${mood.member}-${mood.date}`, mood);
+  for (const mood of remote) {
+    const key = `${mood.member}-${mood.date}`;
+    const existing = map.get(key);
+    const remoteTs = Date.parse(mood.updated_at || mood.created_at);
+    const localTs = existing ? Date.parse(existing.updated_at || existing.created_at) : 0;
+    if (!existing || remoteTs >= localTs) map.set(key, mood);
+  }
+  return pruneMoods(Array.from(map.values()));
 }
 
 export const useMoodStore = create<MoodState>()(
@@ -35,6 +55,10 @@ export const useMoodStore = create<MoodState>()(
       moods: [],
       isLoading: false,
 
+      pruneOldMoods: () => {
+        set((state) => ({ moods: pruneMoods(state.moods) }));
+      },
+
       upsertMood: async (member, value, note) => {
         const today = getTodayISO();
         const existing = get().moods.find(
@@ -42,19 +66,31 @@ export const useMoodStore = create<MoodState>()(
         );
 
         if (existing) {
+          const updatedAt = new Date().toISOString();
           set((state) => ({
-            moods: state.moods.map((m) =>
-              m.id === existing.id ? { ...m, value, note } : m
+            moods: pruneMoods(
+              state.moods.map((m) =>
+                m.id === existing.id ? { ...m, value, note, updated_at: updatedAt } : m
+              )
             ),
           }));
 
-          // Sync to Supabase
           const auth = useAuthStore.getState();
           if (auth.instanceId && auth.isOnline) {
             try {
               const client = auth.getSupabase();
               if (client) {
-                await client.from('moods').update({ value, note: note || null }).eq('id', existing.id);
+                await client
+                  .from('moods')
+                  .upsert({
+                    id: existing.id,
+                    instance_id: auth.instanceId,
+                    member,
+                    value,
+                    note: note || null,
+                    date: today,
+                    created_at: existing.created_at,
+                  }, { onConflict: 'instance_id,member,date' });
               }
             } catch (err) {
               console.warn('Could not sync mood update:', err);
@@ -68,9 +104,10 @@ export const useMoodStore = create<MoodState>()(
             note,
             date: today,
             created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           };
           set((state) => ({
-            moods: [...state.moods, newMood],
+            moods: pruneMoods([...state.moods, newMood]),
           }));
 
           const auth = useAuthStore.getState();
@@ -78,7 +115,7 @@ export const useMoodStore = create<MoodState>()(
             try {
               const client = auth.getSupabase();
               if (client) {
-                await client.from('moods').insert({
+                await client.from('moods').upsert({
                   id: newMood.id,
                   instance_id: auth.instanceId,
                   member: newMood.member,
@@ -86,7 +123,7 @@ export const useMoodStore = create<MoodState>()(
                   note: newMood.note || null,
                   date: newMood.date,
                   created_at: newMood.created_at,
-                });
+                }, { onConflict: 'instance_id,member,date' });
               }
             } catch (err) {
               console.warn('Could not sync mood:', err);
@@ -105,12 +142,8 @@ export const useMoodStore = create<MoodState>()(
         return get().getTodayMood(partnerSlot);
       },
 
-      getRecentMoods: (member, days) => {
-        const today = new Date();
-        const startDate = new Date();
-        startDate.setDate(today.getDate() - days);
-        const startStr = startDate.toISOString().split('T')[0];
-
+      getRecentMoods: (member, days = MOOD_RETENTION_DAYS) => {
+        const startStr = daysAgoISO(days);
         return get()
           .moods.filter((m) => m.member === member && m.date >= startStr)
           .sort((a, b) => b.date.localeCompare(a.date));
@@ -124,21 +157,26 @@ export const useMoodStore = create<MoodState>()(
         try {
           const client = auth.getSupabase();
           if (client) {
+            const cutoff = daysAgoISO(MOOD_RETENTION_DAYS);
             const { data, error } = await client
               .from('moods')
               .select('*')
+              .eq('instance_id', auth.instanceId)
+              .gte('date', cutoff)
               .order('date', { ascending: false });
 
             if (!error && data) {
-              const moods: MoodEntry[] = data.map((d: DbMood) => ({
+              const remote: MoodEntry[] = data.map((d: DbMood) => ({
                 id: d.id,
                 member: d.member,
                 value: d.value as MoodValue,
                 note: d.note || undefined,
                 date: d.date,
                 created_at: d.created_at,
+                updated_at: d.created_at,
               }));
-              set({ moods });
+              set({ moods: mergeMoods(get().moods, remote) });
+              await client.from('moods').delete().eq('instance_id', auth.instanceId).lt('date', cutoff);
             }
           }
         } catch (err) {
@@ -153,7 +191,7 @@ export const useMoodStore = create<MoodState>()(
         if (!auth.instanceId || !isSupabaseConfigured() || !supabase) return () => {};
 
         const channel = supabase
-          .channel('moods-changes')
+          .channel(`moods-changes-${auth.instanceId}`)
           .on(
             'postgres_changes',
             {
@@ -175,6 +213,7 @@ export const useMoodStore = create<MoodState>()(
     }),
     {
       name: 'espacio-pareja-moods',
+      partialize: (state) => ({ moods: pruneMoods(state.moods) }),
     }
   )
 );

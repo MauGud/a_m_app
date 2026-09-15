@@ -1,79 +1,60 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { SectionIntro } from '@/components/ui/section-intro';
 import { useAuthStore } from '@/stores/auth-store';
 import { useSparkStore } from '@/stores/spark-store';
 import { cn } from '@/lib/utils';
+import { useUserMedia } from '@/lib/use-user-media';
 
 export default function SparkPage() {
   const { memberSlot, displayName, partnerName } = useAuthStore();
-  const { getTodaySpark, triggerSpark, submitSpark, hasSubmitted } = useSparkStore();
-
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const sparks = useSparkStore((s) => s.sparks);
+  const getTodaySpark = useSparkStore((s) => s.getTodaySpark);
+  const triggerSpark = useSparkStore((s) => s.triggerSpark);
+  const submitSpark = useSparkStore((s) => s.submitSpark);
+  const hasSubmitted = useSparkStore((s) => s.hasSubmitted);
+  const fetchFromSupabase = useSparkStore((s) => s.fetchFromSupabase);
 
   const [isCapturing, setIsCapturing] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const { videoRef, capturePhoto, error } = useUserMedia(isCapturing && !capturedImage, 'user');
 
   const todaySpark = getTodaySpark();
   const alreadySubmitted = memberSlot ? hasSubmitted(memberSlot) : false;
 
-  const startCamera = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 720 } },
-        audio: false,
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    } catch (err) {
-      console.error('Camera error:', err);
-    }
-  }, []);
-
-  const stopCamera = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-  }, []);
-
-  const capturePhoto = useCallback((): string | null => {
-    if (!videoRef.current) return null;
-    const canvas = document.createElement('canvas');
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-    ctx.drawImage(videoRef.current, 0, 0);
-    return canvas.toDataURL('image/jpeg', 0.8);
-  }, []);
+  useEffect(() => {
+    fetchFromSupabase();
+    const waiting = todaySpark && todaySpark.status !== 'revealed';
+    if (!waiting) return undefined;
+    const interval = setInterval(() => {
+      fetchFromSupabase();
+    }, 3000);
+    return () => clearInterval(interval);
+    // todaySpark identity changes every fetch; status/length are the triggers we care about.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchFromSupabase, todaySpark?.status, sparks.length]);
 
   const handleStartSpark = () => {
     triggerSpark();
   };
 
-  const handleOpenCamera = async () => {
+  const handleOpenCamera = () => {
     setIsCapturing(true);
-    await startCamera();
   };
 
   const handleCapture = () => {
     const photo = capturePhoto();
     if (photo) {
       setCapturedImage(photo);
-      stopCamera();
     }
   };
 
   const handleRetake = () => {
     setCapturedImage(null);
-    startCamera();
   };
 
   const handleSubmit = () => {
@@ -85,27 +66,31 @@ export default function SparkPage() {
   };
 
   const getMySubmission = () => {
-    return todaySpark?.submissions.find(s => s.member === memberSlot);
+    return todaySpark?.submissions.find((s) => s.member === memberSlot);
   };
 
   const getPartnerSubmission = () => {
     const partnerSlot = memberSlot === 'MEMBER_A' ? 'MEMBER_B' : 'MEMBER_A';
-    return todaySpark?.submissions.find(s => s.member === partnerSlot);
+    return todaySpark?.submissions.find((s) => s.member === partnerSlot);
   };
 
   return (
     <AppLayout title="Spark">
-      <div className="page-container">
-        {/* No spark started */}
+      <div className="page-container space-y-6">
+        <SectionIntro emoji="✨" title="La foto del mismo instante">
+          Tómense una foto al mismo tiempo, sin ver la del otro. Cuando ambos envían, se revelan
+          juntas. Así nace la magia del día, aunque estén lejos.
+        </SectionIntro>
+
         {!todaySpark && (
-          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+          <div className="flex flex-col items-center justify-center min-h-[40vh]">
             <div className="text-center mb-8">
               <span className="text-6xl mb-4 block">💕</span>
               <h2 className="text-xl font-semibold text-gray-800 mb-2">
                 Spark del día
               </h2>
-              <p className="text-gray-600 max-w-xs">
-                Tómense una foto al mismo tiempo sin ver la del otro hasta que ambos envíen
+              <p className="text-gray-600 max-w-xs mx-auto">
+                Cuando uno inicia, el otro lo ve en tiempo real. Nadie ve la foto hasta que los dos envíen.
               </p>
             </div>
             <Button onClick={handleStartSpark} size="lg">
@@ -114,18 +99,18 @@ export default function SparkPage() {
           </div>
         )}
 
-        {/* Spark waiting for submissions */}
         {todaySpark && todaySpark.status !== 'revealed' && !isCapturing && (
           <div className="space-y-6">
             <Card className="p-6 text-center">
               <h2 className="text-xl font-semibold mb-4">Spark activo</h2>
-              
+
               <div className="grid grid-cols-2 gap-4 mb-6">
-                {/* My status */}
-                <div className={cn(
-                  'p-4 rounded-xl',
-                  alreadySubmitted ? 'bg-pastel-green-100' : 'bg-gray-100'
-                )}>
+                <div
+                  className={cn(
+                    'p-4 rounded-xl',
+                    alreadySubmitted ? 'bg-pastel-green-100' : 'bg-gray-100'
+                  )}
+                >
                   <p className="text-sm text-gray-600 mb-2">{displayName}</p>
                   {alreadySubmitted ? (
                     <>
@@ -140,11 +125,12 @@ export default function SparkPage() {
                   )}
                 </div>
 
-                {/* Partner status */}
-                <div className={cn(
-                  'p-4 rounded-xl',
-                  getPartnerSubmission() ? 'bg-pastel-green-100' : 'bg-gray-100'
-                )}>
+                <div
+                  className={cn(
+                    'p-4 rounded-xl',
+                    getPartnerSubmission() ? 'bg-pastel-green-100' : 'bg-gray-100'
+                  )}
+                >
                   <p className="text-sm text-gray-600 mb-2">{partnerName}</p>
                   {getPartnerSubmission() ? (
                     <>
@@ -175,7 +161,6 @@ export default function SparkPage() {
           </div>
         )}
 
-        {/* Camera view */}
         {isCapturing && !capturedImage && (
           <div className="space-y-4">
             <div className="relative aspect-square bg-black rounded-2xl overflow-hidden">
@@ -186,6 +171,11 @@ export default function SparkPage() {
                 muted
                 className="w-full h-full object-cover scale-x-[-1]"
               />
+              {error && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+                  <p className="text-white text-center p-4">{error}</p>
+                </div>
+              )}
             </div>
             <div className="text-center">
               <Button
@@ -199,7 +189,6 @@ export default function SparkPage() {
           </div>
         )}
 
-        {/* Preview */}
         {isCapturing && capturedImage && (
           <div className="space-y-4">
             <div className="aspect-square rounded-2xl overflow-hidden">
@@ -220,7 +209,6 @@ export default function SparkPage() {
           </div>
         )}
 
-        {/* Revealed */}
         {todaySpark && todaySpark.status === 'revealed' && (
           <div className="space-y-6">
             <div className="text-center">
@@ -229,7 +217,6 @@ export default function SparkPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              {/* My photo */}
               <div>
                 <p className="text-sm text-gray-600 text-center mb-2">{displayName}</p>
                 {getMySubmission() && (
@@ -241,7 +228,6 @@ export default function SparkPage() {
                 )}
               </div>
 
-              {/* Partner photo */}
               <div>
                 <p className="text-sm text-gray-600 text-center mb-2">{partnerName}</p>
                 {getPartnerSubmission() && (

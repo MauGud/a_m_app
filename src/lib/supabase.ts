@@ -1,69 +1,90 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-// Create client only if we have credentials
+const isModernKey = supabaseAnonKey.startsWith('sb_');
+
+function createCoupleClient(extraHeaders?: Record<string, string>): SupabaseClient | null {
+  if (!supabaseUrl || !supabaseAnonKey) return null;
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+    global: {
+      headers: extraHeaders,
+      fetch: async (input, init = {}) => {
+        const headers = new Headers(init.headers);
+        headers.set('apikey', supabaseAnonKey);
+        if (isModernKey) {
+          const auth = headers.get('Authorization');
+          if (auth?.startsWith(`Bearer ${supabaseAnonKey}`) || auth?.startsWith('Bearer sb_')) {
+            headers.delete('Authorization');
+          }
+        }
+        if (extraHeaders) {
+          Object.entries(extraHeaders).forEach(([key, value]) => headers.set(key, value));
+        }
+        return fetch(input, { ...init, headers });
+      },
+    },
+  });
+}
+
 let _supabase: SupabaseClient | null = null;
 
 export const supabase = (() => {
-  if (!supabaseUrl || !supabaseAnonKey) {
-    // Return a mock client for build time
-    return null as unknown as SupabaseClient;
-  }
   if (!_supabase) {
-    _supabase = createClient(supabaseUrl, supabaseAnonKey);
+    _supabase = createCoupleClient();
   }
-  return _supabase;
+  return _supabase as SupabaseClient;
 })();
 
 export function isSupabaseConfigured(): boolean {
   return Boolean(supabaseUrl && supabaseAnonKey);
 }
 
-// Helper to set instance ID for RLS
 export function getSupabaseWithInstance(instanceId: string): SupabaseClient | null {
-  if (!supabaseUrl || !supabaseAnonKey) return null;
-  
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    global: {
-      headers: {
-        'x-instance-id': instanceId,
-      },
-    },
-  });
+  return createCoupleClient({ 'x-instance-id': instanceId });
 }
 
-// Upload image to storage
+export function logSupabaseError(context: string, error: { message?: string } | null | undefined) {
+  if (!error) return;
+  console.warn(`[supabase] ${context}:`, error.message || error);
+}
+
 export async function uploadImage(
   bucket: 'memories' | 'sparks',
   base64Data: string,
   fileName: string
 ): Promise<string | null> {
   if (!supabase || !isSupabaseConfigured()) return null;
-  
+
   try {
-    // Convert base64 to blob
     const base64Response = await fetch(base64Data);
     const blob = await base64Response.blob();
 
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(fileName, blob, {
-        contentType: 'image/jpeg',
-        upsert: true,
-      });
+    const upload = supabase.storage.from(bucket).upload(fileName, blob, {
+      contentType: 'image/jpeg',
+      upsert: true,
+    });
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000));
+    const raced = await Promise.race([upload, timeout]);
+    if (!raced) {
+      console.error('Upload timed out:', fileName);
+      return null;
+    }
+    const { data, error } = raced;
 
     if (error) {
       console.error('Upload error:', error);
       return null;
     }
 
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(data.path);
-
+    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
     return urlData.publicUrl;
   } catch (err) {
     console.error('Upload error:', err);
@@ -71,7 +92,6 @@ export async function uploadImage(
   }
 }
 
-// Database types
 export interface DbInstance {
   id: string;
   secret_hash: string;
@@ -136,12 +156,16 @@ export interface DbActivity {
   instance_id: string;
   title: string;
   description: string | null;
-  category: 'pago' | 'recoger' | 'pendiente' | 'casa' | 'compras';
+  category: 'pago' | 'recoger' | 'pendiente' | 'casa' | 'compras' | 'date' | 'meta' | 'cumple';
   status: 'pending' | 'completed';
   due_date: string;
   due_time: string | null;
   assigned_to: 'MEMBER_A' | 'MEMBER_B' | null;
-  recurring: 'none' | 'weekly' | 'monthly';
+  recurring: 'none' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly' | 'custom';
+  recurring_interval?: number | null;
+  recurring_unit?: 'day' | 'week' | 'month' | 'year' | null;
+  recurring_anchor_day?: number | null;
+  updated_at?: string | null;
   created_by: 'MEMBER_A' | 'MEMBER_B';
   created_at: string;
   completed_at: string | null;

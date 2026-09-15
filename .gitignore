@@ -34,6 +34,9 @@ Thumbs.db
 # Vercel
 .vercel
 
+# E2E artifacts
+.e2e-artifacts/
+
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
