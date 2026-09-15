@@ -1,8 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Output standalone for smaller deployments
-  output: 'standalone',
-  
   // Strict mode for better development
   reactStrictMode: true,
   
