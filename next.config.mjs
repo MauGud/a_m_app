@@ -11,14 +11,6 @@ const nextConfig = {
         hostname: '*.supabase.co',
         pathname: '/storage/v1/object/public/**',
       },
-      {
-        protocol: 'https',
-        hostname: 'images.openfoodfacts.org',
-      },
-      {
-        protocol: 'https',
-        hostname: 'static.openfoodfacts.org',
-      },
     ],
   },
   
@@ -52,6 +44,10 @@ const nextConfig = {
           {
             key: 'Permissions-Policy',
             value: 'camera=(self), geolocation=(self), microphone=(), payment=()',
+          },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=63072000; includeSubDomains; preload',
           },
         ],
       },

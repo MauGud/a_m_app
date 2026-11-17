@@ -46,7 +46,7 @@ export function priceBookKey(storeId: string, skuId: string) {
 }
 
 export function skuFitsTrip(sku: GrocerySku, trip: TripKind) {
-  if (trip === 'mes') return sku.trip === 'mes' || sku.prices.costco > 0 || sku.prices.sams > 0;
+  if (trip === 'mes') return sku.trip === 'mes';
   if (trip === 'quincena') return sku.trip !== 'mes';
   return sku.trip === 'semana' || sku.trip === 'quincena';
 }
@@ -72,17 +72,11 @@ export function templateSkus(trip: TripKind) {
     .filter((sku): sku is GrocerySku => Boolean(sku));
 }
 
-export function guidePrice(sku: GrocerySku, chain: ChainId) {
-  return sku.prices[chain] || 0;
-}
-
 export function unitPrice(sku: GrocerySku, store: NearbyStore, book: PriceBook) {
   const captured = book[priceBookKey(store.id, sku.id)];
   if (captured?.price) {
     return { price: captured.price, source: 'caja' as const, seenAt: captured.seenAt };
   }
-  const guide = guidePrice(sku, store.chain);
-  if (guide > 0) return { price: guide, source: 'guia' as const, seenAt: null };
   return { price: 0, source: 'faltante' as const, seenAt: null };
 }
 
@@ -92,7 +86,7 @@ export interface StoreRank {
   subtotal: number;
   coverage: number;
   missing: number;
-  sourceMix: { caja: number; guia: number };
+  sourceMix: { caja: number };
 }
 
 export function rankStores(
@@ -106,14 +100,12 @@ export function rankStores(
       let subtotal = 0;
       let priced = 0;
       let caja = 0;
-      let guia = 0;
       for (const line of lines) {
         const unit = unitPrice(line.sku, store, book);
         if (unit.price <= 0) continue;
         subtotal += unit.price * line.qty;
         priced += 1;
         if (unit.source === 'caja') caja += 1;
-        else guia += 1;
       }
       return {
         store,
@@ -121,7 +113,7 @@ export function rankStores(
         subtotal,
         coverage: lines.length === 0 ? 0 : priced / lines.length,
         missing: Math.max(0, lines.length - priced),
-        sourceMix: { caja, guia },
+        sourceMix: { caja },
       };
     })
     .sort((a, b) => b.coverage - a.coverage || a.subtotal - b.subtotal || a.km - b.km);
@@ -143,15 +135,15 @@ export function recommendStore(
     return { pick, ranked, reason: `${pick.name} · ${storeDistanceKm(pick).toFixed(1)} km de casa` };
   }
   if (!cheapest) return { pick, ranked, reason: 'Más cerca de casa' };
-  const cheaperThanNext = ranked[1] && cheapest.subtotal > 0 && ranked[1].subtotal - cheapest.subtotal >= 15;
-  const reason =
-    pick.id === cheapest.store.id
+  const hasCaja = cheapest.sourceMix.caja > 0;
+  const cheaperThanNext = hasCaja && ranked[1] && cheapest.subtotal > 0 && ranked[1].subtotal - cheapest.subtotal >= 15;
+  const reason = !hasCaja
+    ? `${pick.name} · el más cercano. El total sale cuando anoten el precio de caja.`
+    : pick.id === cheapest.store.id
       ? cheaperThanNext
-        ? `La lista sale más barata aquí (${Math.round(ranked[1].subtotal - cheapest.subtotal)} pesos menos)`
-        : cheapest.km <= (ranked[1]?.km || cheapest.km)
-          ? 'El más cercano con esta lista'
-          : 'Mejor precio de la lista'
-      : `${cheapest.store.name} sale más barato para esta lista`;
+        ? `Con lo visto en caja, aquí sale ${Math.round(ranked[1].subtotal - cheapest.subtotal)} pesos menos`
+        : 'El más cercano con precio de caja'
+      : `${cheapest.store.name} sale más barato con lo anotado en caja`;
   return { pick, ranked, reason };
 }
 
@@ -169,6 +161,6 @@ export function listText(lines: Array<{ sku: GrocerySku; qty: number }>, store: 
     '',
     items || 'Lista vacía',
     '',
-    'Guía de pasillo. El precio de caja se anota al ver el ticket.',
+    'Lista para llevar. El precio se anota al ver el ticket.',
   ].join('\n');
 }

@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { BrandMark } from '@/components/brand/brand-mark';
-import { detectInstallPlatform, isStandaloneDisplay } from '@/lib/notifications';
+import { detectInstallPlatform, isStandaloneDisplay, subscribeWebPush } from '@/lib/notifications';
+import { useAuthStore } from '@/stores/auth-store';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -16,6 +17,8 @@ export function InstallPanel() {
   const [installed, setInstalled] = useState(false);
   const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [status, setStatus] = useState('');
+  const instanceId = useAuthStore((s) => s.instanceId);
+  const memberSlot = useAuthStore((s) => s.memberSlot);
 
   useEffect(() => {
     setPlatform(detectInstallPlatform());
@@ -62,8 +65,33 @@ export function InstallPanel() {
           <li>Confirma el nombre A & M. El icono de fuego y agua queda junto a WhatsApp y el resto.</li>
         </ol>
         <p className="text-xs text-gray-600">
-          En iPhone los avisos de pagos funcionan después de instalarla así.
+          En iPhone los avisos con la app cerrada solo existen después de instalarla así y tocar Activar avisos.
         </p>
+      </Card>
+
+      <Card className="p-4 space-y-3">
+        <h3 className="font-semibold">Activar avisos</h3>
+        <p className="text-sm text-gray-600">
+          Pagos, caducidad del código y si Amanda no entra en un mes. En iPhone hay que abrir A & M desde el icono, no desde Safari.
+        </p>
+        <Button
+          className="w-full"
+          onClick={async () => {
+            if (!instanceId || !memberSlot) {
+              setStatus('Entra con tu código primero.');
+              return;
+            }
+            const result = await subscribeWebPush(instanceId, memberSlot);
+            if (result.ok) setStatus('Avisos listos. Puedes cerrar la app.');
+            else if (result.reason === 'ios-not-installed') {
+              setStatus('Instálala en la pantalla de inicio, ábrela desde el icono, y toca otra vez.');
+            } else if (result.reason === 'denied') {
+              setStatus('El iPhone bloqueó avisos. Ajustes → Notificaciones → A & M.');
+            } else setStatus('Aún no se activaron.');
+          }}
+        >
+          Activar avisos
+        </Button>
       </Card>
 
       <Card className={`p-4 space-y-2 ${platform === 'android' ? 'ring-2 ring-pastel-pink-200' : ''}`}>

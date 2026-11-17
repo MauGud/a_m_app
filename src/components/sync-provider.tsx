@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/auth-store';
-import { usePlansStore } from '@/stores/plans-store';
 import { useMoodStore } from '@/stores/mood-store';
 import { useMemoriesStore } from '@/stores/memories-store';
 import { useSparkStore } from '@/stores/spark-store';
@@ -17,9 +16,6 @@ import { SessionWatch } from '@/components/session-watch';
 export function SyncProvider({ children }: { children: React.ReactNode }) {
   const { hasHydrated, isAuthenticated, instanceId, isOnline, setOnline, finishHydration, reconcileInstance } =
     useAuthStore();
-
-  const plansSubscribe = usePlansStore((s) => s.subscribeToChanges);
-  const plansFetch = usePlansStore((s) => s.fetchFromSupabase);
 
   const moodsSubscribe = useMoodStore((s) => s.subscribeToChanges);
   const moodsFetch = useMoodStore((s) => s.fetchFromSupabase);
@@ -75,7 +71,6 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    plansFetch();
     moodsFetch();
     memoriesFetch();
     sparksFetch();
@@ -85,7 +80,6 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     vaultFetch();
 
     const unsubscribers = [
-      plansSubscribe(),
       moodsSubscribe(),
       memoriesSubscribe(),
       sparksSubscribe(),
@@ -96,7 +90,6 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     ];
 
     const poll = setInterval(() => {
-      plansFetch();
       moodsFetch();
       memoriesFetch();
       sparksFetch();
@@ -115,7 +108,6 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated,
     instanceId,
     isOnline,
-    plansFetch,
     moodsFetch,
     memoriesFetch,
     sparksFetch,
@@ -123,7 +115,6 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     paymentsFetch,
     finanzasFetch,
     vaultFetch,
-    plansSubscribe,
     moodsSubscribe,
     memoriesSubscribe,
     sparksSubscribe,

@@ -9,12 +9,12 @@ import { useAuthStore } from '@/stores/auth-store';
 import { usePaymentsStore } from '@/stores/payments-store';
 import { MEMBER_NAMES, PAYMENT_PRESETS, RECURRING_OPTIONS, type MemberSlot, type RecurringType } from '@/lib/constants';
 import { formatMoney } from '@/lib/finanzas';
-import { ensureNotificationPermission } from '@/lib/notifications';
+import { subscribeWebPush } from '@/lib/notifications';
 import { cn, getTodayISO } from '@/lib/utils';
 import { VaultPanel } from './vault-panel';
 
 export function PaymentsPanel() {
-  const { memberSlot } = useAuthStore();
+  const { memberSlot, instanceId } = useAuthStore();
   const payments = usePaymentsStore((s) => s.payments);
   const addPayment = usePaymentsStore((s) => s.addPayment);
   const completePayment = usePaymentsStore((s) => s.completePayment);
@@ -42,11 +42,21 @@ export function PaymentsPanel() {
   const done = payments.filter((p) => p.status === 'completed').slice(0, 8);
 
   const enableNotifications = async () => {
-    const permission = await ensureNotificationPermission();
-    if (permission === 'granted') setNotifyStatus('Notificaciones activadas 💕');
-    else if (permission === 'denied') setNotifyStatus('El celular bloqueó avisos. Actívenlos en Ajustes.');
-    else if (permission === 'unsupported') setNotifyStatus('Este navegador no permite avisos. Instalen la app.');
-    else setNotifyStatus('Aún no se activaron.');
+    if (!instanceId || !memberSlot) {
+      setNotifyStatus('Entra con tu código antes de activar avisos.');
+      return;
+    }
+    const result = await subscribeWebPush(instanceId, memberSlot);
+    if (result.ok) setNotifyStatus('Avisos activados, también con la app cerrada.');
+    else if (result.reason === 'ios-not-installed') {
+      setNotifyStatus('En iPhone: Safari → Agregar a pantalla de inicio, abre A & M desde el icono, y vuelve a tocar aquí.');
+    } else if (result.reason === 'denied') {
+      setNotifyStatus('El celular bloqueó avisos. Actívenlos en Ajustes.');
+    } else if (result.reason === 'unsupported') {
+      setNotifyStatus('Este navegador no permite avisos. Instalen la app.');
+    } else if (result.reason === 'no-vapid') {
+      setNotifyStatus('Faltan las llaves de avisos en el servidor.');
+    } else setNotifyStatus('Aún no se activaron.');
   };
 
   const submit = async () => {

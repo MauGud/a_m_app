@@ -20,7 +20,7 @@ interface AuthState {
   selectMember: (slot: MemberSlot) => void;
   verifySecret: (secret: string) => Promise<boolean>;
   reconcileInstance: () => Promise<void>;
-  recordPresence: () => Promise<void>;
+  recordPresence: (opts?: { secret?: boolean }) => Promise<void>;
   fetchPresence: () => Promise<void>;
   markExpiryNudge: () => void;
   markAmandaSilenceNudge: () => void;
@@ -112,7 +112,7 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: true,
           lastSeenByMember: { ...get().lastSeenByMember, [slot]: seenAt },
         });
-        void get().recordPresence();
+        void get().recordPresence({ secret: true });
         return true;
       },
 
@@ -149,7 +149,7 @@ export const useAuthStore = create<AuthState>()(
         if (get().isAuthenticated) void get().recordPresence();
       },
 
-      recordPresence: async () => {
+      recordPresence: async (opts) => {
         const { memberSlot, instanceId, isOnline } = get();
         if (!memberSlot || !instanceId) return;
         const seenAt = new Date().toISOString();
@@ -158,11 +158,13 @@ export const useAuthStore = create<AuthState>()(
         try {
           const client = get().getSupabase();
           if (!client) return;
-          await client.from('member_presence').upsert({
+          const row: Record<string, string> = {
             instance_id: instanceId,
             member: memberSlot,
             last_seen: seenAt,
-          });
+          };
+          if (opts?.secret) row.last_secret_at = seenAt;
+          await client.from('member_presence').upsert(row);
         } catch {
           // local last-seen is enough until SQL exists
         }

@@ -274,21 +274,18 @@ function DatesPageInner() {
     router.push(`/recuerdos/nuevo?${params.toString()}`);
   };
 
-  const shareInstagram = async (activity: Activity) => {
-    const extra = getExtra(activity.id);
-    const memory = memories.find((m) => m.id === extra.memoryId) || memories[0];
+  const shareDate = async (activity: Activity) => {
     const text = `${activity.title}\n${activity.description || ''}\n#AyM`;
     try {
       if (navigator.share) {
         await navigator.share({ title: activity.title, text });
-      } else {
-        window.open('https://www.instagram.com/', '_blank', 'noopener');
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
       }
-      track(memberSlot, 'huella', 'instagram');
+      track(memberSlot, 'huella', 'share');
     } catch {
-      window.open('https://www.instagram.com/', '_blank', 'noopener');
+      // share cancelled
     }
-    void memory;
   };
 
   const sendZip = async () => {
@@ -717,8 +714,8 @@ function DatesPageInner() {
                     <Button size="sm" onClick={() => goToMemory(item)}>
                       {hasMemory ? 'Ver / sumar foto' : 'Subir foto al recuerdo'}
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => shareInstagram(item)}>
-                      Instagram
+                    <Button size="sm" variant="ghost" onClick={() => shareDate(item)}>
+                      Compartir
                     </Button>
                   </div>
                 </Card>

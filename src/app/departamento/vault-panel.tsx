@@ -19,8 +19,8 @@ export function VaultPanel() {
   const [alias, setAlias] = useState('');
   const [brand, setBrand] = useState<CardBrand>('visa');
   const [last4, setLast4] = useState('');
-  const [expMonth, setExpMonth] = useState('11');
-  const [expYear, setExpYear] = useState('29');
+  const [expMonth, setExpMonth] = useState('');
+  const [expYear, setExpYear] = useState('');
   const [owner, setOwner] = useState<MemberSlot>(memberSlot || 'MEMBER_B');
   const [error, setError] = useState('');
 
@@ -122,7 +122,11 @@ export function VaultPanel() {
               </button>
             ))}
           </div>
-          <Button className="w-full" onClick={submit} disabled={last4.length !== 4 || !alias.trim()}>
+          <Button
+            className="w-full"
+            onClick={submit}
+            disabled={last4.length !== 4 || !alias.trim() || expMonth.length < 1 || expYear.length < 2}
+          >
             Guardar método
           </Button>
         </div>

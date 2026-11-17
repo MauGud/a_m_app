@@ -25,7 +25,7 @@ const RULES: Array<{ keys: RegExp; report: Omit<ImpactReport, 'keepLook'> }> = [
     report: {
       area: 'super',
       title: 'Súper y carrito',
-      summary: 'Toca la lista de compras, el pedido en línea y avisos de despensa.',
+      summary: 'Toca la lista presencial, las sucursales cerca de casa y los precios de caja.',
       alsoTouches: ['depto', 'pagos'],
     },
   },
@@ -52,7 +52,7 @@ const RULES: Array<{ keys: RegExp; report: Omit<ImpactReport, 'keepLook'> }> = [
     report: {
       area: 'finanzas',
       title: 'Presupuesto',
-      summary: 'Toca el gemelo de Finanzas Mau y los saldos.',
+      summary: 'Toca el presupuesto que Mau registra en esta app.',
       alsoTouches: ['pagos', 'seguridad'],
     },
   },

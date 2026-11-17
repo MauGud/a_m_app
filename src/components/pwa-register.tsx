@@ -3,9 +3,11 @@
 import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/auth-store';
 import { usePaymentsStore } from '@/stores/payments-store';
+import { subscribeWebPush } from '@/lib/notifications';
 
 export function PwaRegister() {
   const memberSlot = useAuthStore((s) => s.memberSlot);
+  const instanceId = useAuthStore((s) => s.instanceId);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const notifyDuePayments = usePaymentsStore((s) => s.notifyDuePayments);
 
@@ -27,6 +29,12 @@ export function PwaRegister() {
     }, 60_000);
     return () => clearInterval(interval);
   }, [isAuthenticated, memberSlot, notifyDuePayments]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !memberSlot || !instanceId) return;
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    subscribeWebPush(instanceId, memberSlot).catch(() => {});
+  }, [isAuthenticated, memberSlot, instanceId]);
 
   return null;
 }

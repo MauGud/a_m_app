@@ -57,14 +57,14 @@ function DepartamentoPage() {
       return {
         emoji: '🛒',
         title: 'Súper del depto',
-        text: 'Lista presencial de la semana, la quincena o el mes. Rankea Walmart, Chedraui y Soriana cerca de casa, y Costco o Sam’s para el mayoreo. El precio de anaquel en vivo las cadenas no lo publican: aquí guía más lo que anoten en caja.',
+        text: 'Lista para llevar a Walmart, Chedraui, Soriana, Costco o Sam’s cerca de casa. El total sale de lo que anoten en caja, no de un precio inventado.',
       };
     }
     if (tab === 'finanzas') {
       return {
         emoji: '💬',
         title: 'Consultas de presupuesto',
-        text: 'El mismo asistente de Finanzas Mau, con el look de esta app: deudas, cajas, quincena y gastos, sin salir de aquí.',
+        text: 'Deudas, cajas, quincena y gastos que Mau registra aquí. Se guardan en esta app y en Supabase.',
       };
     }
     if (tab === 'pagos') {
@@ -85,7 +85,7 @@ function DepartamentoPage() {
       return {
         emoji: '🛠️',
         title: 'Taller de Mau',
-        text: 'Protocolo de tarjetas, gemelo de Finanzas y reportes. Amanda no ve esta pestaña.',
+        text: 'Protocolo de tarjetas y reportes para Cursor. Amanda no ve esta pestaña.',
       };
     }
     return {

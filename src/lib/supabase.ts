@@ -100,17 +100,6 @@ export interface DbInstance {
   created_at: string;
 }
 
-export interface DbPlan {
-  id: string;
-  instance_id: string;
-  title: string;
-  description: string | null;
-  status: 'pending' | 'completed';
-  created_by: 'MEMBER_A' | 'MEMBER_B';
-  created_at: string;
-  completed_at: string | null;
-}
-
 export interface DbMood {
   id: string;
   instance_id: string;

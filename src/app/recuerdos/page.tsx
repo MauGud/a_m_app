@@ -137,15 +137,15 @@ export default function RecuerdosPage() {
                       try {
                         if (navigator.share) {
                           await navigator.share({ title: 'A & M', text });
-                        } else {
-                          window.open('https://www.instagram.com/', '_blank', 'noopener');
+                        } else if (navigator.clipboard?.writeText) {
+                          await navigator.clipboard.writeText(text);
                         }
                       } catch {
-                        window.open('https://www.instagram.com/', '_blank', 'noopener');
+                        // share cancelled
                       }
                     }}
                   >
-                    Instagram
+                    Compartir
                   </Button>
                   <Button
                     variant="ghost"

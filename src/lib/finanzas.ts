@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { assertSafeToPersist } from './security';
 
-export const FINANZAS_ARTIFACT_URL = 'https://claude.ai/artifact/CzDEj9oDcg63XrVXT1KdjW';
 export const FINANZAS_CARDS = ['HEY', 'BBVA', 'NU', 'LIVERPOOL'] as const;
 export type FinanceCardName = (typeof FINANZAS_CARDS)[number];
 
@@ -44,35 +43,21 @@ export interface FinanceSnapshot {
 
 export const DEFAULT_FINANZAS: FinanceSnapshot = {
   cards: [
-    { name: 'HEY', debt: 0, spendable: 0, note: 'No se usa' },
-    { name: 'BBVA', debt: 0, spendable: 0, note: 'No se usa' },
-    { name: 'NU', debt: 12840, spendable: 4200, note: 'Tarjeta activa de la quincena' },
-    { name: 'LIVERPOOL', debt: 0, spendable: 0, note: 'No se usa' },
+    { name: 'HEY', debt: 0, spendable: 0 },
+    { name: 'BBVA', debt: 0, spendable: 0 },
+    { name: 'NU', debt: 0, spendable: 0 },
+    { name: 'LIVERPOOL', debt: 0, spendable: 0 },
   ],
-  cajas: [
-    { id: 'muebles', name: 'Muebles', balance: 4800, goal: 25000 },
-    { id: 'emergencia', name: 'Emergencia', balance: 6200, goal: 15000 },
-  ],
-  fixedExpenses: [
-    { id: 'renta', name: 'Renta Ocelotl 14', amount: 12000, card: 'BBVA' },
-    { id: 'internet', name: 'Internet', amount: 699, card: 'NU' },
-    { id: 'luz', name: 'CFE / Luz', amount: 450, card: 'NU' },
-    { id: 'agua', name: 'Agua', amount: 280, card: 'NU' },
-  ],
-  quincena: [
-    { id: 'q1', concept: 'Nómina / ingreso', day15: 18000, day30: 18000 },
-    { id: 'q2', concept: 'Renta', day15: 12000, day30: 0 },
-    { id: 'q3', concept: 'Servicios', day15: 0, day30: 1429 },
-    { id: 'q4', concept: 'Aportación Muebles', day15: 500, day30: 500 },
-  ],
-  weeklyLeft: 1850,
-  monthlyVariableLeft: 7400,
+  cajas: [],
+  fixedExpenses: [],
+  quincena: [],
+  weeklyLeft: 0,
+  monthlyVariableLeft: 0,
 };
 
 export const ASSISTANT_CHIPS = [
-  'Ahorrar más para Muebles',
-  'Compra a MSI',
-  'Gastar más en Nu',
+  '¿Cuánto debo en Nu?',
+  'Registrar un gasto',
   'Aportar a una caja',
   '¿Cuál es la dirección del depto?',
 ] as const;

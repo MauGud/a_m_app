@@ -1,0 +1,25 @@
+# Cinco pulsos al día (UTC). En CDMX: 8:00, 12:00, 16:00, 20:00 y 23:00.
+# Vercel Hobby solo corre un cron al día; este workflow es el que sí da cinco.
+name: five-a-day
+on:
+  schedule:
+    - cron: '0 14 * * *'
+    - cron: '0 18 * * *'
+    - cron: '0 22 * * *'
+    - cron: '0 2 * * *'
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pulse A & M
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "Faltan secrets APP_URL y CRON_SECRET en el repo."
+            exit 1
+          fi
+          curl -fsS -H "Authorization: Bearer ${CRON_SECRET}" "${APP_URL%/}/api/cron/tick"

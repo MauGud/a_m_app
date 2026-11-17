@@ -272,4 +272,22 @@ CREATE TABLE IF NOT EXISTS member_presence (
 ALTER TABLE member_presence ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can read presence" ON member_presence FOR SELECT USING (true);
 CREATE POLICY "Users can write presence" ON member_presence FOR ALL USING (true) WITH CHECK (true);
+ALTER TABLE member_presence ADD COLUMN IF NOT EXISTS last_secret_at TIMESTAMPTZ;
+ALTER TABLE member_presence ADD COLUMN IF NOT EXISTS expiry_nudged_at TIMESTAMPTZ;
+ALTER TABLE member_presence ADD COLUMN IF NOT EXISTS silence_nudged_at TIMESTAMPTZ;
 ALTER PUBLICATION supabase_realtime ADD TABLE member_presence;
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  instance_id UUID NOT NULL REFERENCES instances(id) ON DELETE CASCADE,
+  member TEXT NOT NULL CHECK (member IN ('MEMBER_A', 'MEMBER_B')),
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_push_instance_member ON push_subscriptions(instance_id, member);
+ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can read push" ON push_subscriptions FOR SELECT USING (true);
+CREATE POLICY "Users can write push" ON push_subscriptions FOR ALL USING (true) WITH CHECK (true);

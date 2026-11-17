@@ -10,9 +10,9 @@ import { supabase, isSupabaseConfigured, logSupabaseError } from '@/lib/supabase
 import { useAuthStore } from './auth-store';
 import { assertSafeToPersist, safeLog } from '@/lib/security';
 
-function isEmptySnapshot(snapshot: FinanceSnapshot) {
+function isLegacySeed(snapshot: FinanceSnapshot) {
   const nu = snapshot.cards.find((card) => card.name === 'NU');
-  return (!nu || (nu.debt === 0 && nu.spendable === 0)) && snapshot.fixedExpenses.length === 0;
+  return nu?.debt === 12840 && nu?.spendable === 4200;
 }
 
 export interface ChatMessage {
@@ -26,7 +26,7 @@ export interface ChatMessage {
 interface FinanzasState {
   snapshot: FinanceSnapshot;
   updatedAt: string;
-  source: 'app' | 'artifact' | 'import' | 'seed';
+  source: 'app' | 'import';
   heartbeatAt: string | null;
   messages: ChatMessage[];
   pendingActionLabel: string | null;
@@ -44,21 +44,21 @@ interface FinanzasState {
 
 const WELCOME: Omit<ChatMessage, 'id' | 'createdAt'> = {
   role: 'assistant',
-  text: 'Pregúntame lo que quieras de tus finanzas o mándame gastos, aportaciones a cajas, capturas o estados de cuenta. Antes de cambiar algo te pido que lo confirmes. Este panel es el gemelo del artifact de Claude: lo que confirmes aquí se guarda para los dos canales.',
+  text: 'Pregúntame deudas, gastos o cajas. Antes de cambiar un número te pido que lo confirmes. Lo que registres queda en esta app y en Supabase, no en Claude.',
 };
 
-function seedState() {
+function emptyState() {
   return {
     snapshot: DEFAULT_FINANZAS,
     updatedAt: new Date().toISOString(),
-    source: 'seed' as const,
+    source: 'app' as const,
   };
 }
 
 export const useFinanzasStore = create<FinanzasState>()(
   persist(
     (set, get) => ({
-      ...seedState(),
+      ...emptyState(),
       heartbeatAt: null,
       messages: [
         {
@@ -116,7 +116,7 @@ export const useFinanzasStore = create<FinanzasState>()(
               {
                 id: crypto.randomUUID(),
                 role: 'assistant',
-                text: 'Listo, ya quedó registrado y se espejea al gemelo 💕',
+                text: 'Listo, ya quedó registrado 💕',
                 createdAt: new Date().toISOString(),
               },
             ],
@@ -190,10 +190,14 @@ export const useFinanzasStore = create<FinanzasState>()(
             return;
           }
           if (!data?.snapshot) {
-            if (!isEmptySnapshot(get().snapshot)) void get().pushSnapshot();
+            if (!isLegacySeed(get().snapshot)) void get().pushSnapshot();
             return;
           }
           const remote = parseFinanceSnapshot(data.snapshot);
+          if (isLegacySeed(remote)) {
+            set({ heartbeatAt: data.heartbeat_at || data.updated_at || null });
+            return;
+          }
           const remoteTs = Date.parse(data.updated_at || '');
           const localTs = Date.parse(get().updatedAt || '');
           set({ heartbeatAt: data.heartbeat_at || data.updated_at || null });
@@ -235,7 +239,7 @@ export const useFinanzasStore = create<FinanzasState>()(
       },
     }),
     {
-      name: 'espacio-pareja-finanzas-v3',
+      name: 'espacio-pareja-finanzas-v4',
       partialize: (state) => ({
         snapshot: state.snapshot,
         updatedAt: state.updatedAt,
@@ -243,8 +247,8 @@ export const useFinanzasStore = create<FinanzasState>()(
         messages: state.messages.slice(-40),
       }),
       onRehydrateStorage: () => (state) => {
-        if (state && isEmptySnapshot(state.snapshot)) {
-          useFinanzasStore.setState(seedState());
+        if (state && isLegacySeed(state.snapshot)) {
+          useFinanzasStore.setState(emptyState());
         }
       },
     }

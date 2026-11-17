@@ -10,11 +10,9 @@ import { useAuthStore } from '@/stores/auth-store';
 import { answerFinanzas } from '@/lib/finanzas-assistant';
 import {
   ASSISTANT_CHIPS,
-  FINANZAS_ARTIFACT_URL,
   cardStatus,
   currentQuincenaLabel,
   formatMoney,
-  snapshotToMirror,
 } from '@/lib/finanzas';
 import { FINANZAS_REFRESH_MS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
@@ -23,7 +21,6 @@ export function FinanzasPanel() {
   const { memberSlot } = useAuthStore();
   const snapshot = useFinanzasStore((s) => s.snapshot);
   const updatedAt = useFinanzasStore((s) => s.updatedAt);
-  const source = useFinanzasStore((s) => s.source);
   const heartbeatAt = useFinanzasStore((s) => s.heartbeatAt);
   const messages = useFinanzasStore((s) => s.messages);
   const pendingActionLabel = useFinanzasStore((s) => s.pendingActionLabel);
@@ -31,12 +28,9 @@ export function FinanzasPanel() {
   const confirmPending = useFinanzasStore((s) => s.confirmPending);
   const dismissPending = useFinanzasStore((s) => s.dismissPending);
   const newConversation = useFinanzasStore((s) => s.newConversation);
-  const importMirror = useFinanzasStore((s) => s.importMirror);
   const fetchFromSupabase = useFinanzasStore((s) => s.fetchFromSupabase);
   const payments = usePaymentsStore((s) => s.payments);
   const [draft, setDraft] = useState('');
-  const [mirrorText, setMirrorText] = useState('');
-  const [mirrorStatus, setMirrorStatus] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
   const isMau = memberSlot === 'MEMBER_B';
 
@@ -94,7 +88,7 @@ export function FinanzasPanel() {
           <div>
             <h3 className="font-semibold">Finanzas Mau</h3>
             <p className="text-xs text-gray-600">
-              Gemelo del artifact · {source} · {new Date(updatedAt).toLocaleString('es-MX')}
+              Guardado aquí · {new Date(updatedAt).toLocaleString('es-MX')}
               {heartbeatAt ? ` · pulso ${new Date(heartbeatAt).toLocaleTimeString('es-MX')}` : ''}
             </p>
           </div>
@@ -199,7 +193,7 @@ export function FinanzasPanel() {
       </Card>
 
       <Card className="p-4 space-y-2">
-        <h3 className="font-semibold">Gastos fijos del mes (Hey)</h3>
+        <h3 className="font-semibold">Gastos fijos del mes</h3>
         {snapshot.fixedExpenses.length === 0 ? (
           <p className="text-sm text-gray-600">Sin gastos fijos cargados aún.</p>
         ) : (
@@ -244,6 +238,9 @@ export function FinanzasPanel() {
 
       <Card className="p-4 space-y-2">
         <h3 className="font-semibold">Cajas</h3>
+        {snapshot.cajas.length === 0 && (
+          <p className="text-sm text-gray-600">Aún no hay cajas. Pídele al chat que cree una.</p>
+        )}
         {snapshot.cajas.map((caja) => (
           <div key={caja.id} className="flex justify-between text-sm">
             <span>{caja.name}</span>
@@ -258,61 +255,9 @@ export function FinanzasPanel() {
       <Card className="p-4">
         <h3 className="font-semibold mb-1">Cómo manejar tus tarjetas</h3>
         <p className="text-sm text-gray-600">
-          Pregunta al asistente antes de gastar. Si algo cambia un saldo, te pide confirmación. Nu es la
-          tarjeta de uso diario; Hey, BBVA y Liverpool se marcan liquidada cuando no hay deuda.
+          Pregunta antes de gastar. Si algo cambia un saldo, te pide confirmación. Los ceros significan
+          que aún no hay un número registrado, no un saldo inventado.
         </p>
-      </Card>
-
-      <Card className="p-4 space-y-3">
-        <h3 className="font-semibold">Espejo con Claude</h3>
-        <p className="text-sm text-gray-600">
-          Claude no empuja solo: pegas el JSON una vez aquí y queda guardado. Esta app lo sincroniza y lo
-          vuelve a leer 5 veces al día. El artifact no tiene API pública, así que el pegado es el puente
-          real.
-        </p>
-        <a className="text-sm underline" href={FINANZAS_ARTIFACT_URL} target="_blank" rel="noreferrer">
-          Abrir artifact
-        </a>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            className="flex-1"
-            onClick={async () => {
-              const payload = JSON.stringify(snapshotToMirror(snapshot, { updatedAt, source }), null, 2);
-              try {
-                await navigator.clipboard.writeText(payload);
-                setMirrorStatus('JSON copiado. Pégalo en Claude.');
-              } catch {
-                setMirrorText(payload);
-                setMirrorStatus('Copia el JSON de abajo.');
-              }
-            }}
-          >
-            Copiar gemelo
-          </Button>
-          <Button
-            className="flex-1"
-            onClick={() => {
-              try {
-                importMirror(JSON.parse(mirrorText), 'import');
-                setMirrorStatus('Gemelo importado y guardado.');
-                setMirrorText('');
-              } catch {
-                setMirrorStatus('Ese JSON no se pudo leer.');
-              }
-            }}
-            disabled={!mirrorText.trim()}
-          >
-            Pegar gemelo
-          </Button>
-        </div>
-        <Textarea
-          rows={3}
-          value={mirrorText}
-          placeholder="Pega aquí el JSON del artifact"
-          onChange={(e) => setMirrorText(e.target.value)}
-        />
-        {mirrorStatus && <p className="text-sm text-gray-600">{mirrorStatus}</p>}
       </Card>
     </div>
   );

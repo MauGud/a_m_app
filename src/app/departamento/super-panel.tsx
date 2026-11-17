@@ -158,7 +158,7 @@ export function SuperPanel() {
 
       {recommendation.ranked.length > 1 && lines.length > 0 && (
         <Card className="p-4 space-y-2">
-          <h3 className="font-medium">Dónde sale más barata esta lista</h3>
+          <h3 className="font-medium">Sucursales para esta lista</h3>
           {recommendation.ranked.map((row, index) => (
             <button
               key={row.store.id}
@@ -174,8 +174,8 @@ export function SuperPanel() {
                 {row.store.name}
               </span>
               <span className="block text-xs text-gray-600">
-                {row.subtotal > 0 ? formatMoney(row.subtotal) : 'sin coincidencias'} · {row.km.toFixed(1)} km
-                {row.sourceMix.caja ? ` · ${row.sourceMix.caja} vistos en caja` : ' · guía'}
+                {row.subtotal > 0 ? formatMoney(row.subtotal) : 'sin precio de caja'} · {row.km.toFixed(1)} km
+                {row.sourceMix.caja ? ` · ${row.sourceMix.caja} vistos en caja` : ''}
               </span>
             </button>
           ))}
@@ -267,8 +267,7 @@ export function SuperPanel() {
                 </div>
               </div>
               <p className="text-xs text-gray-500">
-                {unit.price > 0 ? formatMoney(unit.price) : 'sin precio en este súper'} ·{' '}
-                {unit.source === 'caja' ? 'visto en caja' : unit.source === 'guia' ? 'guía CDMX' : 'no se vende aquí'}
+                {unit.price > 0 ? `${formatMoney(unit.price)} · visto en caja` : 'sin precio de caja'}
               </p>
               <div className="flex gap-2">
                 <Input
@@ -305,8 +304,7 @@ export function SuperPanel() {
       </Card>
 
       <p className="text-xs text-gray-500">
-        {skus.length} SKUs · marcas reales de Walmart, Chedraui, Soriana, Costco y Sam\'s. El ranking usa guía más lo
-        que anoten en caja. Las cadenas no publican anaquel en vivo.
+        {skus.length} SKUs de pasillo. El total de la lista solo usa precios que anoten en caja.
       </p>
       <div className="grid grid-cols-2 gap-3">
         {skus.slice(0, shown).map((sku) => {
@@ -321,8 +319,7 @@ export function SuperPanel() {
               </p>
               <p className="text-sm font-medium leading-snug">{sku.name}</p>
               <p className="text-xs text-gray-600">
-                {unit.price > 0 ? `${formatMoney(unit.price)} ${unit.source === 'caja' ? 'caja' : 'guía'}` : 'en mayoreo / otro súper'}{' '}
-                · {sku.unit}
+                {unit.price > 0 ? `${formatMoney(unit.price)} caja` : 'sin precio de caja'} · {sku.unit}
               </p>
               <Button size="sm" className="w-full" onClick={() => add(sku)}>
                 A la lista
@@ -337,7 +334,7 @@ export function SuperPanel() {
         </Button>
       )}
       <p className="text-[11px] text-gray-400">
-        {NEARBY_STORES.length} sucursales reales alrededor de Ocelotl 14, guardadas en la app. Sin esperar Overpass.
+        {NEARBY_STORES.length} sucursales alrededor de Ocelotl 14, guardadas en la app.
       </p>
     </div>
   );

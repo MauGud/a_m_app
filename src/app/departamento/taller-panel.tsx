@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { FINANZAS_ARTIFACT_URL } from '@/lib/finanzas';
 import { MAU_OPS_EMAIL, MAX_PAYMENT_METHODS } from '@/lib/security';
 import { mailtoForIncident, useOpsStore } from '@/stores/ops-store';
 
@@ -67,18 +66,6 @@ export function TallerPanel() {
         </div>
       </Card>
 
-      <Card className="p-4 space-y-2">
-        <h3 className="font-semibold">Gemelo de Finanzas</h3>
-        <p className="text-sm text-gray-600">
-          El presupuesto de esta app y el artifact de Claude no se hablan solos. Pegas el JSON una vez; aquí se
-          guarda y se lee 5 veces al día. Claude no deja escribirle desde fuera. Si cambias aquí, copias el JSON
-          al artifact.
-        </p>
-        <a className="text-sm text-gray-800 underline" href={FINANZAS_ARTIFACT_URL} target="_blank" rel="noreferrer">
-          Abrir artifact de Claude
-        </a>
-      </Card>
-
       <Card className="p-4 space-y-3">
         <h3 className="font-semibold">Taller de Mau</h3>
         <p className="text-sm text-gray-600">
@@ -88,7 +75,7 @@ export function TallerPanel() {
         <Textarea
           rows={3}
           value={draft}
-          placeholder="Se trabó el súper al pedir en Chedraui"
+          placeholder="Se trabó la lista del súper o un aviso"
           onChange={(e) => setDraft(e.target.value)}
         />
         <Button className="w-full" disabled={!draft.trim()} onClick={send}>

@@ -2,7 +2,7 @@ import { MAX_PAYMENT_METHODS, assertLast4, assertSafeText } from './security';
 import type { MemberSlot } from './constants';
 
 export type CardBrand = 'visa' | 'mastercard' | 'amex' | 'carnet' | 'otro';
-export type Processor = 'handoff' | 'mercadopago' | 'stripe';
+export type Processor = 'local';
 
 export interface VaultedMethod {
   id: string;
@@ -56,8 +56,8 @@ export function buildVaultedMethod(input: {
     expMonth: input.expMonth,
     expYear: year,
     owner: input.owner,
-    processor: 'handoff',
-    processorRef: `handoff_${crypto.randomUUID()}`,
+    processor: 'local',
+    processorRef: `local_${crypto.randomUUID()}`,
     createdAt: now,
     updatedAt: now,
     created_at: now,

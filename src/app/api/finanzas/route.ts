@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
   const supabase = client();
   const id = await instanceId();
   if (!supabase || !id) {
-    return NextResponse.json(snapshotToMirror(DEFAULT_FINANZAS, { source: 'seed' }));
+    return NextResponse.json(snapshotToMirror(DEFAULT_FINANZAS, { source: 'app' }));
   }
   const { data } = await supabase
     .from('finanzas_snapshots')
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     .eq('instance_id', id)
     .maybeSingle();
   if (!data?.snapshot) {
-    return NextResponse.json(snapshotToMirror(DEFAULT_FINANZAS, { source: 'seed' }));
+    return NextResponse.json(snapshotToMirror(DEFAULT_FINANZAS, { source: 'app' }));
   }
   try {
     const snapshot = parseMirrorPayload(data.snapshot);
@@ -69,12 +69,12 @@ export async function PUT(request: NextRequest) {
     const { error } = await supabase.from('finanzas_snapshots').upsert({
       instance_id: id,
       snapshot,
-      source: 'artifact',
+      source: 'app',
       updated_at: updatedAt,
       heartbeat_at: updatedAt,
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json(snapshotToMirror(snapshot, { updatedAt, source: 'artifact' }));
+    return NextResponse.json(snapshotToMirror(snapshot, { updatedAt, source: 'app' }));
   } catch (err) {
     return NextResponse.json({ error: redactSecrets(String(err)) }, { status: 400 });
   }

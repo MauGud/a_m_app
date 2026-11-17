@@ -23,6 +23,8 @@ const stamp = Date.now();
 const DATE_TITLE = `[e2e] cena ${stamp}`;
 const META_TITLE = `[e2e] meta ${stamp}`;
 const CAL_TITLE = `[e2e] pago ${stamp}`;
+const PAY_TITLE = `[e2e] renta ${stamp}`;
+const VAULT_ALIAS = 'Nu Mau prueba';
 const outDir = join(root, '.e2e-artifacts');
 mkdirSync(outDir, { recursive: true });
 
@@ -74,6 +76,10 @@ async function login(page) {
   await page.getByRole('button', { name: /Entrar/ }).click();
   await waitForText(page, 'Código incorrecto');
   log(true, 'wrong PIN shows error');
+  await page.getByPlaceholder('Tu código').fill('1711');
+  await page.getByRole('button', { name: /Entrar/ }).click();
+  await waitForText(page, 'Código incorrecto');
+  log(true, 'Mau PIN without # is rejected');
   await page.getByPlaceholder('Tu código').fill(PIN);
   await page.getByRole('button', { name: /Entrar/ }).click();
   await page.waitForURL((url) => !url.pathname.includes('/setup'), { timeout: 20000 });
@@ -146,13 +152,39 @@ async function testDepartamento(page) {
   await page.getByRole('button', { name: 'Presupuesto' }).click();
   await waitForText(page, 'Finanzas Mau');
   const fin = await page.locator('body').innerText();
-  log(fin.includes('Gemelo') || fin.includes('artifact'), 'finanzas twin copy visible to Mau');
+  log(fin.includes('Finanzas Mau') && !fin.includes('Gemelo') && !fin.includes('artifact'), 'finanzas is local notes not a Claude twin');
   await page.getByRole('button', { name: 'Taller' }).click();
   await waitForText(page, 'Protocolo de tarjetas');
   log(true, 'Mau taller and card protocol visible');
   await page.getByRole('button', { name: 'Pagos' }).click();
   await waitForText(page, 'Tarjetas digitales');
+  await waitForText(page, 'Activar notificaciones');
   log(true, 'vault last4 UI visible to Mau');
+  await page.getByRole('button', { name: 'App' }).click();
+  await waitForText(page, 'Activar avisos');
+  log(true, 'install panel can enable web push');
+  await page.getByRole('button', { name: 'Pagos' }).click();
+  await waitForText(page, 'Nuevo recordatorio');
+  await page.getByPlaceholder('Renta, Internet, Tarjeta Nu…').fill(PAY_TITLE);
+  await page.getByPlaceholder('Monto').fill('1500');
+  await page.getByRole('button', { name: 'Crear pago' }).click();
+  await waitForText(page, PAY_TITLE);
+  log(true, 'created payment reminder');
+  await page.getByPlaceholder('Apodo, ejemplo Nu Mau').fill(VAULT_ALIAS);
+  await page.getByPlaceholder('Últimos 4').fill('4242');
+  await page.getByPlaceholder('MM').fill('12');
+  await page.getByPlaceholder('AA').fill('29');
+  await page.getByRole('button', { name: 'Guardar método' }).click();
+  await waitForText(page, VAULT_ALIAS);
+  log(true, 'vault accepts last4 only');
+  await page.getByRole('button', { name: 'Súper' }).click();
+  await page.getByPlaceholder('Busca Lala, Bimbo, Pétalo, pechuga…').fill('Lala');
+  await waitForText(page, 'Lala');
+  log(true, 'super catalog search finds Lala');
+  await page.getByRole('button', { name: 'Depto' }).click();
+  await waitForText(page, 'Compartir ubicación');
+  const share = page.getByRole('button', { name: /Compartir ubicación|WhatsApp|Copiar/ });
+  log((await share.count()) > 0, 'depto has a share/copy control');
 }
 
 async function testMood(page) {
@@ -247,8 +279,103 @@ async function testAllNav(page) {
   }
 }
 
+async function testAmandaIsolated(browser) {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    locale: 'es-MX',
+  });
+  const page = await context.newPage();
+  page.setDefaultTimeout(20000);
+  try {
+    await page.goto(`${BASE_URL}/setup`, { waitUntil: 'networkidle' });
+    await waitForText(page, '¿Quién eres?');
+    await page.getByRole('button', { name: 'Amanda' }).click();
+    await waitForText(page, 'Código');
+    await page.getByPlaceholder('Código de 4 dígitos').fill('1711#');
+    await page.getByRole('button', { name: /Entrar/ }).click();
+    await waitForText(page, 'Código incorrecto');
+    log(true, 'Amanda PIN with # is rejected');
+    await page.getByPlaceholder('Código de 4 dígitos').fill('1711');
+    await page.getByRole('button', { name: /Entrar/ }).click();
+    await page.waitForURL((url) => !url.pathname.includes('/setup'), { timeout: 20000 });
+    await waitForText(page, 'Hola, Amanda');
+    log(true, 'PIN 1711 logs in as Amanda');
+    await clickNav(page, 'Depto');
+    await waitForText(page, 'Ocelotl 14');
+    const depto = await page.locator('body').innerText();
+    log(!depto.includes('Presupuesto') && !depto.includes('Taller'), 'Amanda does not see Mau-only depto tabs');
+    log(depto.includes('Pagos') && depto.includes('App') && depto.includes('Súper'), 'Amanda sees pagos, app and super');
+    await clickNav(page, 'Dates');
+    const dates = await page.locator('body').innerText();
+    log(!dates.includes('Qué usa más Amanda'), 'Amanda does not see Mau usage dash');
+    await shot(page, '07-amanda');
+  } finally {
+    await context.close();
+  }
+}
+
+async function probeHttp() {
+  const home = await fetch(BASE_URL, { redirect: 'manual' });
+  log(home.status === 200 || home.status === 307 || home.status === 308, 'GET / responds', String(home.status));
+  const headers = Object.fromEntries(home.headers.entries());
+  log(String(headers['x-frame-options'] || '').toUpperCase() === 'DENY', 'X-Frame-Options DENY');
+  log(String(headers['x-content-type-options'] || '') === 'nosniff', 'X-Content-Type-Options nosniff');
+  log(String(headers['strict-transport-security'] || '').includes('max-age'), 'HSTS header present');
+
+  const sw = await fetch(`${BASE_URL}/sw.js`);
+  const swText = await sw.text();
+  log(sw.ok && swText.includes("addEventListener('push'"), 'GET /sw.js handles push');
+  const manifest = await fetch(`${BASE_URL}/manifest.json`);
+  const man = manifest.ok ? await manifest.json() : {};
+  log(manifest.ok && man.display === 'standalone', 'GET /manifest.json standalone');
+  log(Boolean(man.icons?.some((icon) => String(icon.src).includes('192'))), 'manifest lists 192 icon');
+
+  const keyRes = await fetch(`${BASE_URL}/api/push/public-key`);
+  const keyJson = keyRes.ok ? await keyRes.json() : {};
+  log(keyRes.ok && Boolean(keyJson.key), 'GET /api/push/public-key returns VAPID public key');
+
+  const subBad = await fetch(`${BASE_URL}/api/push/subscribe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  log(subBad.status === 400, 'POST /api/push/subscribe rejects empty body', String(subBad.status));
+
+  const tickOpen = await fetch(`${BASE_URL}/api/cron/tick`);
+  log(tickOpen.status === 401, 'GET /api/cron/tick locked without secret', String(tickOpen.status));
+  const finOpen = await fetch(`${BASE_URL}/api/cron/finanzas`);
+  log(finOpen.status === 401, 'GET /api/cron/finanzas locked without secret', String(finOpen.status));
+
+  const secret = process.env.CRON_SECRET;
+  const tickAuth = await fetch(`${BASE_URL}/api/cron/tick`, {
+    headers: secret ? { Authorization: `Bearer ${secret}` } : undefined,
+  });
+  const tickJson = tickAuth.ok ? await tickAuth.json().catch(() => ({})) : {};
+  log(tickAuth.ok && tickJson.ok === true, 'GET /api/cron/tick with CRON_SECRET', `${tickAuth.status} ${JSON.stringify(tickJson).slice(0, 180)}`);
+
+  const finanzasOpen = await fetch(`${BASE_URL}/api/finanzas`);
+  log(finanzasOpen.status === 401, 'GET /api/finanzas locked without token', String(finanzasOpen.status));
+
+  const places = await fetch(`${BASE_URL}/api/places?q=Condesa`);
+  const placesJson = places.ok ? await places.json() : {};
+  log(places.ok && Array.isArray(placesJson.places), 'GET /api/places returns places array', String(places.status));
+
+  const storesGone = await fetch(`${BASE_URL}/api/stores`);
+  log(storesGone.status === 404, 'GET /api/stores removed', String(storesGone.status));
+  const productsGone = await fetch(`${BASE_URL}/api/products?q=lala`);
+  log(productsGone.status === 404, 'GET /api/products removed', String(productsGone.status));
+
+  const camara = await fetch(`${BASE_URL}/camara`, { redirect: 'manual' });
+  log(camara.status === 307 || camara.status === 308, 'GET /camara redirects', String(camara.status));
+  const planes = await fetch(`${BASE_URL}/planes`, { redirect: 'manual' });
+  log(planes.status === 307 || planes.status === 308, 'GET /planes redirects', String(planes.status));
+}
+
 async function cleanup(page) {
-  for (const title of [DATE_TITLE, META_TITLE, CAL_TITLE]) {
+  await clickNav(page, 'Depto');
+  await page.getByRole('button', { name: 'Pagos' }).click();
+  await waitForText(page, 'Nuevo recordatorio');
+  for (const title of [DATE_TITLE, META_TITLE, CAL_TITLE, PAY_TITLE]) {
     const del = page.getByRole('button', { name: `Eliminar ${title}` });
     if (await del.count()) {
       await del.first().click();
@@ -290,12 +417,18 @@ async function probeSupabase() {
     'finanzas_snapshots',
     'payment_methods',
     'member_presence',
+    'push_subscriptions',
   ];
   for (const table of tables) {
     const column = table === 'finanzas_snapshots' || table === 'member_presence' ? 'instance_id' : 'id';
     const res = await fetch(`${url}/rest/v1/${table}?select=${column}&limit=1`, { headers });
     log(res.ok, `supabase ${table} GET`, String(res.status));
   }
+  const presenceCols = await fetch(
+    `${url}/rest/v1/member_presence?select=last_secret_at,expiry_nudged_at,silence_nudged_at&limit=1`,
+    { headers }
+  );
+  log(presenceCols.ok, 'supabase presence has last_secret_at and nudge columns', String(presenceCols.status));
   const hash = secretHash();
   const raw = hash.slice(0, 32);
   const instanceId = `${raw.slice(0, 8)}-${raw.slice(8, 12)}-4${raw.slice(13, 16)}-${raw.slice(16, 20)}-${raw.slice(20, 32)}`;
@@ -328,11 +461,37 @@ async function probeSupabase() {
   } else {
     log(false, 'supabase date/yearly insert failed', probeText.slice(0, 240));
   }
+
+  const pan = await fetch(`${url}/rest/v1/payment_methods`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      instance_id: instanceId,
+      alias: '__probe_pan__',
+      brand: 'visa',
+      last4: '4242',
+      exp_month: 11,
+      exp_year: 29,
+      owner: 'MEMBER_B',
+      processor: 'local',
+      processor_ref: '4111111111111111',
+    }),
+  });
+  const panText = await pan.text();
+  log(
+    !pan.ok && (pan.status === 400 || pan.status === 409 || /check constraint|payment_methods_no_pan/i.test(panText)),
+    'supabase rejects 16-digit PAN in processor_ref',
+    `${pan.status} ${panText.slice(0, 160)}`
+  );
+  if (pan.ok) {
+    await fetch(`${url}/rest/v1/payment_methods?alias=eq.__probe_pan__`, { method: 'DELETE', headers });
+  }
 }
 
 async function main() {
   console.log(`\nE2E against ${BASE_URL}\n`);
   await probeSupabase();
+  await probeHttp();
 
   const { chromium } = await import('playwright-core');
   const browser = await chromium.launch({
@@ -370,6 +529,7 @@ async function main() {
     await testSpark(page);
     await shot(page, '06-spark');
     await testRedirects(page);
+    await testAmandaIsolated(browser);
     await cleanup(page);
   } catch (err) {
     failed += 1;

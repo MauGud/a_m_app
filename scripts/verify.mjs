@@ -173,7 +173,7 @@ assert('photo nudges 10', dateRules.includes('PHOTO_NUDGE_LIMIT = 10'));
 const datesPage = readFileSync(join(root, 'src/app/dates/page.tsx'), 'utf8');
 assert('dates tab En la lista', datesPage.includes('En la lista'));
 assert('dates tab Ya juntos', datesPage.includes('Ya juntos'));
-assert('dates has Instagram', datesPage.includes('Instagram'));
+assert('dates shares without fake Instagram', datesPage.includes('Compartir') && !datesPage.includes('instagram.com'));
 assert('mau zip email', datesPage.includes('mau@nexcar.mx'));
 assert('dates page has Qué hacemos hoy', datesPage.includes('Qué hacemos hoy'));
 
@@ -208,26 +208,39 @@ assert('vault Mau-only', vaultUi.includes("memberSlot !== 'MEMBER_B'"));
 const superPanel = readFileSync(join(root, 'src/app/departamento/super-panel.tsx'), 'utf8');
 assert(
   'super is presencial lists',
-  groceryCatalog.includes('Despensa de la semana') && superPanel.includes('Dónde sale más barata esta lista')
+  groceryCatalog.includes('Despensa de la semana') && superPanel.includes('Sucursales para esta lista')
 );
 assert('super has no online checkout', !superPanel.includes('Pedir en') && !superPanel.includes('En línea'));
-assert('super does not fetch open food facts photos', !superPanel.includes('/api/products'));
+assert('super does not fetch open food facts photos', !superPanel.includes('/api/products') && !existsSync(join(root, 'src/app/api/products/route.ts')));
 assert('super uses local store directory', !superPanel.includes('/api/stores') && superPanel.includes('NEARBY_STORES'));
+assert('super does not rank with guía prices', !grocery.includes("source: 'guia'") && !superPanel.includes('guía CDMX'));
 assert('address can share location', readFileSync(join(root, 'src/app/departamento/address-panel.tsx'), 'utf8').includes('Compartir ubicación'));
 
 const taller = readFileSync(join(root, 'src/app/departamento/taller-panel.tsx'), 'utf8');
 assert('protocol explains no PAN in bot', taller.includes('Si esta app pudiera teclear tu tarjeta'));
 
+const finanzas = readFileSync(join(root, 'src/lib/finanzas.ts'), 'utf8');
 const finanzasStore = readFileSync(join(root, 'src/stores/finanzas-store.ts'), 'utf8');
-assert('finanzas upserts supabase twin', finanzasStore.includes('finanzas_snapshots'));
+assert('finanzas upserts supabase', finanzasStore.includes('finanzas_snapshots'));
+assert('finanzas has no Claude artifact', !finanzas.includes('claude.ai/artifact') && !finanzasStore.includes('gemelo'));
+assert('finanzas has no seed NU debt', !finanzas.includes('12840'));
 
-const cron = readFileSync(join(root, 'src/app/api/cron/finanzas/route.ts'), 'utf8');
-assert('hourly cron heartbeat exists', cron.includes('heartbeat_at'));
+const cronTick = readFileSync(join(root, 'src/lib/cron-tick.ts'), 'utf8');
+assert('cron tick heartbeat exists', cronTick.includes('heartbeat_at'));
+assert('cron tick sends web push', cronTick.includes('sendPushToMember'));
+assert('cron tick does not fetch Claude', !cronTick.includes('claude.ai'));
 assert(
-  'vercel cron five times a day',
+  'vercel keeps a daily backup cron',
   existsSync(join(root, 'vercel.json')) &&
-    readFileSync(join(root, 'vercel.json'), 'utf8').includes('2,5,14,18,22')
+    readFileSync(join(root, 'vercel.json'), 'utf8').includes('/api/cron/tick')
 );
+const fiveDay = readFileSync(join(root, '.github/workflows/five-a-day.yml'), 'utf8');
+assert('github actions fires five utc hours', fiveDay.includes('0 14 * * *') && fiveDay.includes('0 5 * * *'));
+const sw = readFileSync(join(root, 'public/sw.js'), 'utf8');
+assert('service worker handles push', sw.includes("addEventListener('push'"));
+const antesPush = readFileSync(join(root, 'supabase-antes-push.sql'), 'utf8');
+assert('sql before github push has web push table', antesPush.includes('push_subscriptions'));
+assert('sql before github push blocks PAN', antesPush.includes('payment_methods_no_pan'));
 
 const migration = readFileSync(join(root, 'supabase-migration.sql'), 'utf8');
 assert('sql has finanzas_snapshots', migration.includes('finanzas_snapshots'));
