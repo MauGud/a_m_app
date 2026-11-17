@@ -57,7 +57,7 @@ function DepartamentoPage() {
       return {
         emoji: '🛒',
         title: 'Súper del depto',
-        text: 'Busquen por pasillo, SKU real o marca. Presencial con mapa; en línea abre Chedraui, Soriana, Walmart o Jüsto. El cobro queda en su caja, no aquí.',
+        text: 'Lista presencial de la semana, la quincena o el mes. Rankea Walmart, Chedraui y Soriana cerca de casa, y Costco o Sam’s para el mayoreo. El precio de anaquel en vivo las cadenas no lo publican: aquí guía más lo que anoten en caja.',
       };
     }
     if (tab === 'finanzas') {

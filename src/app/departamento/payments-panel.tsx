@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { useAuthStore } from '@/stores/auth-store';
 import { usePaymentsStore } from '@/stores/payments-store';
-import { MEMBER_NAMES, RECURRING_OPTIONS, type MemberSlot, type RecurringType } from '@/lib/constants';
+import { MEMBER_NAMES, PAYMENT_PRESETS, RECURRING_OPTIONS, type MemberSlot, type RecurringType } from '@/lib/constants';
 import { formatMoney } from '@/lib/finanzas';
 import { ensureNotificationPermission } from '@/lib/notifications';
 import { cn, getTodayISO } from '@/lib/utils';
@@ -88,10 +88,28 @@ export function PaymentsPanel() {
       <Card className="p-4 space-y-3">
         <h3 className="font-semibold">Nuevo recordatorio</h3>
         <Input
-          placeholder="Luz, internet, renta..."
+          placeholder="Renta, Internet, Tarjeta Nu…"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
+        <div className="flex flex-wrap gap-2">
+          {PAYMENT_PRESETS.map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => {
+                setTitle(preset);
+                setRecurring('monthly');
+              }}
+              className={cn(
+                'px-3 py-1.5 rounded-full text-xs',
+                title === preset ? 'bg-yellow-100 ring-1 ring-yellow-300' : 'bg-gray-100'
+              )}
+            >
+              {preset}
+            </button>
+          ))}
+        </div>
         <Input
           inputMode="decimal"
           placeholder="Monto"

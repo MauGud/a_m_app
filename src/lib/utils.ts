@@ -48,6 +48,21 @@ export function getTodayISO(date: Date = new Date()): string {
   return getLocalISODate(date);
 }
 
+export function getCalendarDaysUntil(dateStr: string, from: Date = new Date()): number {
+  const today = getLocalISODate(from);
+  const start = Date.parse(`${today}T12:00:00`);
+  const end = Date.parse(`${dateStr}T12:00:00`);
+  return Math.round((end - start) / (1000 * 60 * 60 * 24));
+}
+
+export function formatDaysUntil(days: number): string {
+  if (days === 0) return 'Hoy';
+  if (days === 1) return 'Mañana';
+  if (days === -1) return 'Ayer';
+  if (days > 1) return `En ${days} días`;
+  return `Hace ${Math.abs(days)} días`;
+}
+
 export function daysAgoISO(days: number): string {
   const date = new Date();
   date.setDate(date.getDate() - days);

@@ -18,7 +18,7 @@ if (existsSync(envPath)) {
 }
 
 const BASE_URL = (process.env.BASE_URL || 'http://127.0.0.1:3005').replace(/\/$/, '');
-const PIN = '1711';
+const PIN = '1711#';
 const stamp = Date.now();
 const DATE_TITLE = `[e2e] cena ${stamp}`;
 const META_TITLE = `[e2e] meta ${stamp}`;
@@ -44,7 +44,7 @@ async function shot(page, name) {
 }
 
 function secretHash() {
-  return createHash('sha256').update(`${PIN}espacio-pareja-salt`).digest('hex');
+  return createHash('sha256').update('1711espacio-pareja-salt').digest('hex');
 }
 
 async function waitForText(page, text, timeout = 15000) {
@@ -70,15 +70,15 @@ async function login(page) {
   await waitForText(page, '¿Quién eres?');
   await page.getByRole('button', { name: 'Mau' }).click();
   await waitForText(page, 'Código secreto');
-  await page.getByPlaceholder('Código de 4 dígitos').fill('0000');
+  await page.getByPlaceholder('Tu código').fill('0000');
   await page.getByRole('button', { name: /Entrar/ }).click();
   await waitForText(page, 'Código incorrecto');
   log(true, 'wrong PIN shows error');
-  await page.getByPlaceholder('Código de 4 dígitos').fill(PIN);
+  await page.getByPlaceholder('Tu código').fill(PIN);
   await page.getByRole('button', { name: /Entrar/ }).click();
   await page.waitForURL((url) => !url.pathname.includes('/setup'), { timeout: 20000 });
   await waitForText(page, 'Hola, Mau');
-  log(true, 'PIN 1711 logs in as Mau');
+  log(true, 'PIN 1711# logs in as Mau');
 }
 
 async function assertNoCamara(page) {
@@ -98,6 +98,9 @@ async function testDates(page) {
   await waitForText(page, 'Qué usa más Amanda');
   log(true, 'Mau-only usage dash visible');
   await page.getByRole('button', { name: 'Explorar' }).click();
+  await page.getByPlaceholder('Busca: Condesa, picnic, vegano, menos de 400').fill('picnic');
+  await waitForText(page, 'Picnic');
+  log(true, 'keyword picnic finds a catalog date');
   await page.getByRole('button', { name: 'A la lista' }).first().click();
   await page.getByRole('button', { name: /En la lista/ }).click();
   await waitForText(page, 'Pactar date');
@@ -110,8 +113,8 @@ async function testCalendar(page) {
   await waitForText(page, 'Calendario');
   const addBtn = page.getByRole('button', { name: /Nueva/ });
   await addBtn.click();
-  await page.getByPlaceholder('¿Qué hay que hacer?').fill(CAL_TITLE);
-  await page.getByRole('button', { name: /Pago/ }).click();
+  await page.getByRole('button', { name: /Renta \/ tarjetas/ }).click();
+  await page.getByPlaceholder('Renta, Internet, Tarjeta Nu…').fill(CAL_TITLE);
   await page.getByRole('button', { name: 'Mensual' }).click();
   await page.getByRole('button', { name: 'Guardar' }).click();
   await waitForText(page, CAL_TITLE);
@@ -132,11 +135,14 @@ async function testCompleteRecurring(page) {
 async function testDepartamento(page) {
   await clickNav(page, 'Depto');
   await waitForText(page, 'Ocelotl 14');
+  await waitForText(page, 'Compartir ubicación');
+  log(true, 'depto location share is visible');
   await page.getByRole('button', { name: 'Súper' }).click();
   await waitForText(page, 'Súper del depto');
-  await page.getByRole('button', { name: 'En línea' }).click();
-  await waitForText(page, 'Pedir en Walmart');
-  log(true, 'online super partners visible');
+  await waitForText(page, 'Walmart Express');
+  await page.getByRole('button', { name: 'Despensa de la semana' }).click();
+  await waitForText(page, 'Lista');
+  log(true, 'presencial super ranks a real nearby store and fills a weekly list');
   await page.getByRole('button', { name: 'Presupuesto' }).click();
   await waitForText(page, 'Finanzas Mau');
   const fin = await page.locator('body').innerText();
@@ -182,7 +188,9 @@ async function testRecuerdos(page) {
     if (preview > 0) {
       await page.getByRole('button', { name: 'Continuar' }).click();
       await waitForText(page, 'Detalles del recuerdo');
-      await page.getByPlaceholder('Escribe un caption (opcional)').fill(`recuerdo ${stamp}`);
+      const titleBox = page.getByPlaceholder('Título');
+      if (await titleBox.count()) await titleBox.fill(`recuerdo ${stamp}`);
+      else await page.getByPlaceholder('Una nota corta').fill(`recuerdo ${stamp}`);
       await page.getByRole('button', { name: /Guardar recuerdo/ }).click({ timeout: 20000 });
       await page.waitForURL((url) => url.pathname === '/recuerdos', { timeout: 20000 });
       log(true, 'saved memory returned to gallery');
@@ -270,9 +278,22 @@ async function probeSupabase() {
     return;
   }
   const headers = { apikey: key, Accept: 'application/json', Prefer: 'return=representation' };
-  const tables = ['instances', 'activities', 'moods', 'sparks', 'memories', 'plans', 'spark_submissions'];
+  const tables = [
+    'instances',
+    'activities',
+    'moods',
+    'sparks',
+    'memories',
+    'plans',
+    'spark_submissions',
+    'payments',
+    'finanzas_snapshots',
+    'payment_methods',
+    'member_presence',
+  ];
   for (const table of tables) {
-    const res = await fetch(`${url}/rest/v1/${table}?select=id&limit=1`, { headers });
+    const column = table === 'finanzas_snapshots' || table === 'member_presence' ? 'instance_id' : 'id';
+    const res = await fetch(`${url}/rest/v1/${table}?select=${column}&limit=1`, { headers });
     log(res.ok, `supabase ${table} GET`, String(res.status));
   }
   const hash = secretHash();

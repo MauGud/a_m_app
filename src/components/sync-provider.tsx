@@ -12,6 +12,7 @@ import { useFinanzasStore } from '@/stores/finanzas-store';
 import { useVaultStore } from '@/stores/vault-store';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { DateReminders } from '@/components/date-reminders';
+import { SessionWatch } from '@/components/session-watch';
 
 export function SyncProvider({ children }: { children: React.ReactNode }) {
   const { hasHydrated, isAuthenticated, instanceId, isOnline, setOnline, finishHydration, reconcileInstance } =
@@ -135,6 +136,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   return (
     <>
       <DateReminders />
+      <SessionWatch />
       {children}
     </>
   );

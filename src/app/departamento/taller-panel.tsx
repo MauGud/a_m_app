@@ -52,8 +52,8 @@ export function TallerPanel() {
             métodos.
           </p>
           <p>
-            <strong>3.</strong> El carrito sale de aquí. El cobro ocurre en Chedraui, Soriana, Walmart o Jüsto, con su
-            propio candado.
+            <strong>3.</strong> La lista sale de aquí. El cobro ocurre en la caja de Walmart, Chedraui, Soriana, Costco o
+            Sam’s, con su propio candado.
           </p>
           <p>
             <strong>4.</strong> Un token de Stripe o Mercado Pago no abre la caja de Walmart. Distinto candado, distinta
@@ -61,7 +61,7 @@ export function TallerPanel() {
           </p>
         </div>
         <div className="rounded-2xl bg-pastel-blue-50 p-3 text-sm space-y-1">
-          <p>Tú → lista → A & M → enlace al súper</p>
+          <p>Tú → lista → A & M → Maps / WhatsApp</p>
           <p>Tú → números → banco / Nu</p>
           <p>A & M nunca → números → súper</p>
         </div>
@@ -70,9 +70,9 @@ export function TallerPanel() {
       <Card className="p-4 space-y-2">
         <h3 className="font-semibold">Gemelo de Finanzas</h3>
         <p className="text-sm text-gray-600">
-          El presupuesto de esta app y el artifact de Claude leen el mismo snapshot. Cada hora (y cada vez que abres
-          Presupuesto) se espejean. Claude no deja escribirle desde fuera; si cambias allá, pegas el JSON aquí. Si
-          cambias aquí, copias el JSON al artifact.
+          El presupuesto de esta app y el artifact de Claude no se hablan solos. Pegas el JSON una vez; aquí se
+          guarda y se lee 5 veces al día. Claude no deja escribirle desde fuera. Si cambias aquí, copias el JSON
+          al artifact.
         </p>
         <a className="text-sm text-gray-800 underline" href={FINANZAS_ARTIFACT_URL} target="_blank" rel="noreferrer">
           Abrir artifact de Claude

@@ -10,9 +10,10 @@ import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { SectionIntro } from '@/components/ui/section-intro';
 import { useActivitiesStore } from '@/stores/activities-store';
 import { useAuthStore } from '@/stores/auth-store';
-import { cn, getTodayISO } from '@/lib/utils';
+import { cn, formatDaysUntil, getCalendarDaysUntil, getTodayISO } from '@/lib/utils';
 import {
   ACTIVITY_CATEGORIES,
+  PAYMENT_PRESETS,
   RECURRING_OPTIONS,
   RECURRING_UNITS,
   getCategoryInfo,
@@ -39,14 +40,6 @@ function getNextBirthday(monthDay: string): string {
   }
 
   return getTodayISO(birthdayDate);
-}
-
-function getDaysUntil(dateStr: string): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(dateStr + 'T12:00:00');
-  const diff = target.getTime() - today.getTime();
-  return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
 export default function CalendarioPage() {
@@ -148,7 +141,7 @@ export default function CalendarioPage() {
           <div className="space-y-2">
             {BIRTHDAYS.map((bday) => {
               const nextDate = getNextBirthday(bday.date);
-              const daysUntil = getDaysUntil(nextDate);
+              const daysUntil = getCalendarDaysUntil(nextDate);
               return (
                 <div key={bday.name} className="flex items-center justify-between py-2">
                   <div className="flex items-center gap-2">
@@ -160,9 +153,9 @@ export default function CalendarioPage() {
                     {daysUntil === 0 ? (
                       <p className="text-xs text-pastel-pink-400 font-bold">¡HOY! 🎉</p>
                     ) : daysUntil <= 7 ? (
-                      <p className="text-xs text-pastel-pink-400">En {daysUntil} días</p>
+                      <p className="text-xs text-pastel-pink-400">{formatDaysUntil(daysUntil)}</p>
                     ) : (
-                      <p className="text-xs text-gray-400">En {daysUntil} días</p>
+                      <p className="text-xs text-gray-400">{formatDaysUntil(daysUntil)}</p>
                     )}
                   </div>
                 </div>
@@ -190,11 +183,31 @@ export default function CalendarioPage() {
         {showForm && (
           <Card className="p-4 space-y-4 border-2 border-pastel-pink-200">
             <Input
-              placeholder="¿Qué hay que hacer?"
+              placeholder={category === 'pago' ? 'Renta, Internet, Tarjeta Nu…' : '¿Qué hay que hacer?'}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               autoFocus
             />
+            {category === 'pago' && (
+              <div className="flex flex-wrap gap-2">
+                {PAYMENT_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => {
+                      setTitle(preset);
+                      setRecurring('monthly');
+                    }}
+                    className={cn(
+                      'px-3 py-1.5 rounded-full text-xs',
+                      title === preset ? 'bg-yellow-100 ring-1 ring-yellow-300' : 'bg-gray-100'
+                    )}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <Textarea
               placeholder="Detalles adicionales (opcional)"

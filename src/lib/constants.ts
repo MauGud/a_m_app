@@ -1,5 +1,9 @@
 export const COUPLE_SECRET = '1711';
+export const AMANDA_SECRET = '1711';
+export const MAU_SECRET = '1711#';
 export const SECRET_TTL_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
+export const AMANDA_SILENCE_DAYS = 30;
+export const FINANZAS_REFRESH_MS = Math.floor((24 * 60 * 60 * 1000) / 5);
 export const MOOD_RETENTION_DAYS = 30;
 
 export const MEMBER_NAMES = {
@@ -8,6 +12,10 @@ export const MEMBER_NAMES = {
 } as const;
 
 export type MemberSlot = 'MEMBER_A' | 'MEMBER_B';
+
+export function secretForMember(slot: MemberSlot) {
+  return slot === 'MEMBER_B' ? MAU_SECRET : AMANDA_SECRET;
+}
 export type ActivityCategory =
   | 'date'
   | 'meta'
@@ -27,10 +35,21 @@ export type RecurringType =
   | 'custom';
 export type RecurringUnit = 'day' | 'week' | 'month' | 'year';
 
+export const PAYMENT_PRESETS = [
+  'Renta',
+  'Internet',
+  'Tarjeta Nu',
+  'Tarjeta BBVA',
+  'Tarjeta Hey',
+  'Liverpool',
+  'Luz',
+  'Agua',
+] as const;
+
 export const ACTIVITY_CATEGORIES = [
   { value: 'date' as const, label: 'Date Juntos', emoji: '💕', color: 'bg-pastel-pink-100' },
   { value: 'meta' as const, label: 'Metas Juntos', emoji: '🎯', color: 'bg-pastel-blue-100' },
-  { value: 'pago' as const, label: 'Pago', emoji: '💰', color: 'bg-yellow-100' },
+  { value: 'pago' as const, label: 'Renta / tarjetas', emoji: '💰', color: 'bg-yellow-100' },
   { value: 'recoger' as const, label: 'Recoger', emoji: '📦', color: 'bg-pastel-green-50' },
   { value: 'pendiente' as const, label: 'Pendiente', emoji: '✏️', color: 'bg-orange-100' },
   { value: 'casa' as const, label: 'Casa', emoji: '🏠', color: 'bg-pastel-green-100' },

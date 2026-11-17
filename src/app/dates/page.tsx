@@ -30,6 +30,7 @@ import {
   formatPriceRange,
   haversineKm,
   recommendToday,
+  searchHint,
   type DateDistance,
   type DateDuration,
   type DateIdea,
@@ -91,7 +92,7 @@ function DatesPageInner() {
   const [city, setCity] = useState('');
   const [band, setBand] = useState<PriceBand | 'todas'>('todas');
   const [mood, setMood] = useState<DateMood | 'todas'>('todas');
-  const [moment, setMoment] = useState<DateMoment | 'todas'>(currentMoment());
+  const [moment, setMoment] = useState<DateMoment | 'todas'>('todas');
   const [duration, setDuration] = useState<DateDuration | 'todas'>('todas');
   const [distance, setDistance] = useState<DateDistance | 'todas'>('todas');
   const [maxPrice, setMaxPrice] = useState('');
@@ -392,7 +393,6 @@ function DatesPageInner() {
                     onClick={() => {
                       setCity(place.city);
                       setState(place.state.includes('México') ? 'Ciudad de México' : place.state);
-                      setQuery(place.city);
                     }}
                     className="text-xs px-3 py-1.5 rounded-full bg-white border border-pastel-pink-100"
                   >
@@ -530,6 +530,9 @@ function DatesPageInner() {
               {todayMode ? 'Para hoy · ' : ''}
               {ideas.length} planes · catálogo {DATE_IDEAS.length} citas (C0001 a C0500)
             </p>
+            {searchHint(query, ideas.length) && (
+              <p className="text-sm text-gray-600">{searchHint(query, ideas.length)}</p>
+            )}
             <div className="space-y-3">
               {ideas.slice(0, ideasShown).map((idea) => {
                 const here = origin || CDMX_CENTER;

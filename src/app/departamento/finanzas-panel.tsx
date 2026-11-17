@@ -16,6 +16,7 @@ import {
   formatMoney,
   snapshotToMirror,
 } from '@/lib/finanzas';
+import { FINANZAS_REFRESH_MS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 export function FinanzasPanel() {
@@ -44,7 +45,7 @@ export function FinanzasPanel() {
     fetchFromSupabase();
     const hour = window.setInterval(() => {
       fetchFromSupabase();
-    }, 60 * 60 * 1000);
+    }, FINANZAS_REFRESH_MS);
     const onFocus = () => fetchFromSupabase();
     window.addEventListener('focus', onFocus);
     return () => {
@@ -265,8 +266,9 @@ export function FinanzasPanel() {
       <Card className="p-4 space-y-3">
         <h3 className="font-semibold">Espejo con Claude</h3>
         <p className="text-sm text-gray-600">
-          Copia el JSON al artifact o pega el del artifact aquí. El snapshot también vive en Supabase y se
-          refresca cada hora.
+          Claude no empuja solo: pegas el JSON una vez aquí y queda guardado. Esta app lo sincroniza y lo
+          vuelve a leer 5 veces al día. El artifact no tiene API pública, así que el pegado es el puente
+          real.
         </p>
         <a className="text-sm underline" href={FINANZAS_ARTIFACT_URL} target="_blank" rel="noreferrer">
           Abrir artifact

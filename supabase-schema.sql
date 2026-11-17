@@ -262,3 +262,14 @@ ALTER PUBLICATION supabase_realtime ADD TABLE sparks;
 ALTER PUBLICATION supabase_realtime ADD TABLE spark_submissions;
 ALTER PUBLICATION supabase_realtime ADD TABLE activities;
 ALTER PUBLICATION supabase_realtime ADD TABLE payments;
+
+CREATE TABLE IF NOT EXISTS member_presence (
+  instance_id UUID NOT NULL REFERENCES instances(id) ON DELETE CASCADE,
+  member TEXT NOT NULL CHECK (member IN ('MEMBER_A', 'MEMBER_B')),
+  last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (instance_id, member)
+);
+ALTER TABLE member_presence ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can read presence" ON member_presence FOR SELECT USING (true);
+CREATE POLICY "Users can write presence" ON member_presence FOR ALL USING (true) WITH CHECK (true);
+ALTER PUBLICATION supabase_realtime ADD TABLE member_presence;

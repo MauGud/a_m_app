@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase, getSupabaseWithInstance, isSupabaseConfigured } from '@/lib/supabase';
-import { COUPLE_SECRET, MEMBER_NAMES, SECRET_TTL_MS, type MemberSlot } from '@/lib/constants';
+import { COUPLE_SECRET, MEMBER_NAMES, SECRET_TTL_MS, secretForMember, type MemberSlot } from '@/lib/constants';
 
 interface AuthState {
   hasHydrated: boolean;
@@ -12,11 +12,18 @@ interface AuthState {
   displayName: string | null;
   partnerName: string | null;
   lastSecretVerifiedAt: number | null;
+  lastSeenByMember: Partial<Record<MemberSlot, string>>;
+  lastExpiryNudgeAt: string | null;
+  lastAmandaSilenceNudgeAt: string | null;
   isOnline: boolean;
 
   selectMember: (slot: MemberSlot) => void;
   verifySecret: (secret: string) => Promise<boolean>;
   reconcileInstance: () => Promise<void>;
+  recordPresence: () => Promise<void>;
+  fetchPresence: () => Promise<void>;
+  markExpiryNudge: () => void;
+  markAmandaSilenceNudge: () => void;
   logout: () => void;
   setOnline: (online: boolean) => void;
   getSupabase: () => ReturnType<typeof getSupabaseWithInstance> | null;
@@ -52,6 +59,9 @@ export const useAuthStore = create<AuthState>()(
       displayName: null,
       partnerName: null,
       lastSecretVerifiedAt: null,
+      lastSeenByMember: {},
+      lastExpiryNudgeAt: null,
+      lastAmandaSilenceNudgeAt: null,
       isOnline: true,
 
       selectMember: (slot) => {
@@ -64,9 +74,10 @@ export const useAuthStore = create<AuthState>()(
       },
 
       verifySecret: async (secret) => {
-        if (secret !== COUPLE_SECRET) return false;
+        const slot = get().memberSlot;
+        if (!slot || secret !== secretForMember(slot)) return false;
 
-        const secretHash = await hashSecret(secret);
+        const secretHash = await hashSecret(COUPLE_SECRET);
         let instanceId = instanceIdFromHash(secretHash);
         const now = Date.now();
 
@@ -93,12 +104,15 @@ export const useAuthStore = create<AuthState>()(
           }
         }
 
+        const seenAt = new Date(now).toISOString();
         set({
           instanceId,
-          instanceSecret: secret,
+          instanceSecret: COUPLE_SECRET,
           lastSecretVerifiedAt: now,
           isAuthenticated: true,
+          lastSeenByMember: { ...get().lastSeenByMember, [slot]: seenAt },
         });
+        void get().recordPresence();
         return true;
       },
 
@@ -132,7 +146,51 @@ export const useAuthStore = create<AuthState>()(
         if (get().instanceId !== instanceId) {
           set({ instanceId, instanceSecret: COUPLE_SECRET });
         }
+        if (get().isAuthenticated) void get().recordPresence();
       },
+
+      recordPresence: async () => {
+        const { memberSlot, instanceId, isOnline } = get();
+        if (!memberSlot || !instanceId) return;
+        const seenAt = new Date().toISOString();
+        set({ lastSeenByMember: { ...get().lastSeenByMember, [memberSlot]: seenAt } });
+        if (!isOnline) return;
+        try {
+          const client = get().getSupabase();
+          if (!client) return;
+          await client.from('member_presence').upsert({
+            instance_id: instanceId,
+            member: memberSlot,
+            last_seen: seenAt,
+          });
+        } catch {
+          // local last-seen is enough until SQL exists
+        }
+      },
+
+      fetchPresence: async () => {
+        const { instanceId, isOnline } = get();
+        if (!instanceId || !isOnline) return;
+        try {
+          const client = get().getSupabase();
+          if (!client) return;
+          const { data } = await client
+            .from('member_presence')
+            .select('member,last_seen')
+            .eq('instance_id', instanceId);
+          if (!data?.length) return;
+          const next = { ...get().lastSeenByMember };
+          for (const row of data) {
+            next[row.member as MemberSlot] = row.last_seen;
+          }
+          set({ lastSeenByMember: next });
+        } catch {
+          // ignore missing table
+        }
+      },
+
+      markExpiryNudge: () => set({ lastExpiryNudgeAt: new Date().toISOString() }),
+      markAmandaSilenceNudge: () => set({ lastAmandaSilenceNudgeAt: new Date().toISOString() }),
 
       logout: () => {
         set({
@@ -168,6 +226,9 @@ export const useAuthStore = create<AuthState>()(
         displayName: state.displayName,
         partnerName: state.partnerName,
         lastSecretVerifiedAt: state.lastSecretVerifiedAt,
+        lastSeenByMember: state.lastSeenByMember,
+        lastExpiryNudgeAt: state.lastExpiryNudgeAt,
+        lastAmandaSilenceNudgeAt: state.lastAmandaSilenceNudgeAt,
         isAuthenticated: state.isAuthenticated,
       }),
       onRehydrateStorage: () => (state) => {

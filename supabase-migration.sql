@@ -248,3 +248,20 @@ ALTER TABLE payment_methods DROP COLUMN IF EXISTS pan;
 ALTER TABLE payment_methods DROP COLUMN IF EXISTS cvv;
 ALTER TABLE payment_methods DROP COLUMN IF EXISTS card_number;
 ALTER TABLE payment_methods DROP COLUMN IF EXISTS number;
+
+CREATE TABLE IF NOT EXISTS member_presence (
+  instance_id UUID NOT NULL REFERENCES instances(id) ON DELETE CASCADE,
+  member TEXT NOT NULL CHECK (member IN ('MEMBER_A', 'MEMBER_B')),
+  last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (instance_id, member)
+);
+ALTER TABLE member_presence ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can read presence" ON member_presence;
+DROP POLICY IF EXISTS "Users can write presence" ON member_presence;
+CREATE POLICY "Users can read presence" ON member_presence FOR SELECT USING (true);
+CREATE POLICY "Users can write presence" ON member_presence FOR ALL USING (true) WITH CHECK (true);
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE member_presence;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

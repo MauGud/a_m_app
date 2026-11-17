@@ -82,6 +82,17 @@ function mergeById(local, remote) {
   return Array.from(map.values());
 }
 
+function getCalendarDaysUntil(dateStr, from = new Date()) {
+  const today = getLocalISODate(from);
+  const start = Date.parse(`${today}T12:00:00`);
+  const end = Date.parse(`${dateStr}T12:00:00`);
+  return Math.round((end - start) / (1000 * 60 * 60 * 24));
+}
+
+const almostTomorrow = new Date('2026-11-16T22:00:00');
+assert('calendar days until tomorrow is 1 not 2', getCalendarDaysUntil('2026-11-17', almostTomorrow) === 1);
+assert('calendar days until today is 0', getCalendarDaysUntil('2026-11-16', almostTomorrow) === 0);
+
 assert('today ISO is local YYYY-MM-DD', /^\d{4}-\d{2}-\d{2}$/.test(getLocalISODate()));
 assert('daily recurrence +1 day', getNextDueDate('2026-01-31', 'daily') === '2026-02-01');
 assert('weekly recurrence +7', getNextDueDate('2026-01-01', 'weekly') === '2026-01-08');
@@ -124,6 +135,7 @@ const apartment = readFileSync(join(root, 'src/lib/apartment.ts'), 'utf8');
 assert('apartment street is Ocelotl 14', apartment.includes('Ocelotl 14'));
 assert('apartment neighborhood Tepetlapa', apartment.includes('San Pablo Tepetlapa'));
 assert('apartment postal 04260', apartment.includes('04260'));
+assert('apartment share helpers exist', apartment.includes('apartmentWhatsAppUrl') && apartment.includes('apartmentWazeUrl'));
 
 const deptoPage = readFileSync(join(root, 'src/app/departamento/page.tsx'), 'utf8');
 assert('departamento has presupuesto tab', deptoPage.includes("'finanzas'"));
@@ -169,8 +181,13 @@ assert('depto has super tab', deptoPage.includes("'super'"));
 assert('depto taller is Mau-only', deptoPage.includes("'taller'") && deptoPage.includes('isMau'));
 assert('presupuesto hidden from Amanda', deptoPage.includes("item.id === 'finanzas'") || deptoPage.includes("id === 'finanzas'"));
 const grocery = readFileSync(join(root, 'src/lib/grocery.ts'), 'utf8');
-assert('grocery has walmart-like departments', grocery.includes('Frutas y verduras') && grocery.includes('Chedraui'));
-assert('grocery has live partner search URLs', grocery.includes('super.walmart.com.mx/search') && grocery.includes('chedraui.com.mx'));
+const groceryCatalog = readFileSync(join(root, 'src/lib/grocery-catalog.ts'), 'utf8');
+const groceryStores = readFileSync(join(root, 'src/lib/grocery-stores.ts'), 'utf8');
+assert('grocery has walmart-like departments', groceryCatalog.includes('Frutas y verduras') && groceryStores.includes('Chedraui'));
+assert('grocery ranks stores', grocery.includes('rankStores') && grocery.includes('recommendStore'));
+assert('nearby stores include Walmart Express', groceryStores.includes('Walmart Express División del Norte'));
+assert('nearby stores include Costco and Sams', groceryStores.includes('Costco Villa Coapa') && groceryStores.includes("Sam's Club Acoxpa"));
+assert('catalog has Lala and Kirkland', groceryCatalog.includes("'Lala'") && groceryCatalog.includes("'Kirkland'"));
 assert('no dummy pendiente partners', !grocery.includes("status: 'pendiente'"));
 
 const security = readFileSync(join(root, 'src/lib/security.ts'), 'utf8');
@@ -189,8 +206,14 @@ assert('vault last4 max 4', vaultUi.includes('maxLength={4}'));
 assert('vault Mau-only', vaultUi.includes("memberSlot !== 'MEMBER_B'"));
 
 const superPanel = readFileSync(join(root, 'src/app/departamento/super-panel.tsx'), 'utf8');
-assert('super opens real stores', superPanel.includes('Pedir en') && superPanel.includes('buildHandoff'));
-assert('super does not send cards', superPanel.includes('Paga allá') || superPanel.includes('no envía'));
+assert(
+  'super is presencial lists',
+  groceryCatalog.includes('Despensa de la semana') && superPanel.includes('Dónde sale más barata esta lista')
+);
+assert('super has no online checkout', !superPanel.includes('Pedir en') && !superPanel.includes('En línea'));
+assert('super does not fetch open food facts photos', !superPanel.includes('/api/products'));
+assert('super uses local store directory', !superPanel.includes('/api/stores') && superPanel.includes('NEARBY_STORES'));
+assert('address can share location', readFileSync(join(root, 'src/app/departamento/address-panel.tsx'), 'utf8').includes('Compartir ubicación'));
 
 const taller = readFileSync(join(root, 'src/app/departamento/taller-panel.tsx'), 'utf8');
 assert('protocol explains no PAN in bot', taller.includes('Si esta app pudiera teclear tu tarjeta'));
@@ -200,10 +223,15 @@ assert('finanzas upserts supabase twin', finanzasStore.includes('finanzas_snapsh
 
 const cron = readFileSync(join(root, 'src/app/api/cron/finanzas/route.ts'), 'utf8');
 assert('hourly cron heartbeat exists', cron.includes('heartbeat_at'));
-assert('vercel cron file', existsSync(join(root, 'vercel.json')) && readFileSync(join(root, 'vercel.json'), 'utf8').includes('/api/cron/finanzas'));
+assert(
+  'vercel cron five times a day',
+  existsSync(join(root, 'vercel.json')) &&
+    readFileSync(join(root, 'vercel.json'), 'utf8').includes('2,5,14,18,22')
+);
 
 const migration = readFileSync(join(root, 'supabase-migration.sql'), 'utf8');
 assert('sql has finanzas_snapshots', migration.includes('finanzas_snapshots'));
+assert('sql has member_presence', migration.includes('member_presence'));
 assert('sql vault last4 only', migration.includes("last4 ~ '^\\d{4}$'"));
 assert('sql drops pan columns', migration.includes('DROP COLUMN IF EXISTS pan'));
 
@@ -223,16 +251,28 @@ assert('next redirects /planes', nextConfig.includes("source: '/planes'"));
 const home = readFileSync(join(root, 'src/app/page.tsx'), 'utf8');
 assert('home capture link is recuerdos/nuevo', home.includes('/recuerdos/nuevo') && !home.includes("href=\"/camara\""));
 
-const dates = readFileSync(join(root, 'src/app/dates/page.tsx'), 'utf8');
-assert('dates page is the 500-citas lista', datesPage.includes('DATE_LIST_LIMIT') || dates.includes('En la lista'));
+assert('dates page is the 500-citas lista', datesPage.includes('DATE_LIST_LIMIT') || datesPage.includes('En la lista'));
+assert('dates search starts with all moments', datesPage.includes("useState<DateMoment | 'todas'>('todas')"));
+assert('dates search explains empty results', datesPage.includes('searchHint'));
+assert('date ideas search is OR', readFileSync(join(root, 'src/lib/date-ideas.ts'), 'utf8').includes('hits.length > 0'));
 
 const calendar = readFileSync(join(root, 'src/app/calendario/page.tsx'), 'utf8');
 assert('calendar has Metas Juntos', calendar.includes('ACTIVITY_CATEGORIES'));
 assert('calendar has custom recurrence', calendar.includes('Personalizado') || calendar.includes('custom'));
+assert('calendar uses calendar-day rounding', calendar.includes('getCalendarDaysUntil'));
+assert('calendar payment presets', calendar.includes('PAYMENT_PRESETS') && calendar.includes('Renta'));
+assert('calendar category is renta tarjetas', readFileSync(join(root, 'src/lib/constants.ts'), 'utf8').includes("'Renta / tarjetas'"));
 
 const auth = readFileSync(join(root, 'src/stores/auth-store.ts'), 'utf8');
 assert('secret is 1711', auth.includes('COUPLE_SECRET'));
+assert('mau pin is 1711#', readFileSync(join(root, 'src/lib/constants.ts'), 'utf8').includes("MAU_SECRET = '1711#'"));
+assert('amanda pin is 1711', readFileSync(join(root, 'src/lib/constants.ts'), 'utf8').includes("AMANDA_SECRET = '1711'"));
+assert('instance still hashes couple secret', auth.includes('hashSecret(COUPLE_SECRET)'));
 assert('60 day ttl used', auth.includes('SECRET_TTL_MS'));
+
+const sessionWatch = readFileSync(join(root, 'src/lib/session-watch.ts'), 'utf8');
+assert('expiry nudges use primes', sessionWatch.includes('PRIMES') && sessionWatch.includes('Amanda ya no entró') === false);
+assert('session watch notifies amanda silence', readFileSync(join(root, 'src/components/session-watch.tsx'), 'utf8').includes('Amanda ya no entró a la app'));
 
 const mood = readFileSync(join(root, 'src/stores/mood-store.ts'), 'utf8');
 assert('moods pruned to 30 days', mood.includes('MOOD_RETENTION_DAYS'));

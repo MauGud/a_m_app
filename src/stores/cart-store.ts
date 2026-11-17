@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { GrocerySku, OnlinePartnerId } from '@/lib/grocery';
+import { DESIGNATED_WEEKLY, type GrocerySku, type TripKind } from '@/lib/grocery';
 
 export interface CartLine {
   sku: GrocerySku;
@@ -8,26 +8,26 @@ export interface CartLine {
 }
 
 interface CartState {
-  mode: 'presencial' | 'enlinea';
-  partnerId: OnlinePartnerId;
+  trip: TripKind;
+  designatedStoreId: string;
   lines: CartLine[];
-  setMode: (mode: 'presencial' | 'enlinea') => void;
-  setPartner: (partnerId: OnlinePartnerId) => void;
+  setTrip: (trip: TripKind) => void;
+  setDesignatedStore: (storeId: string) => void;
   add: (sku: GrocerySku, qty?: number) => void;
+  addMany: (skus: GrocerySku[]) => void;
   setQty: (id: string, qty: number) => void;
   clear: () => void;
-  total: () => number;
   count: () => number;
 }
 
 export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
-      mode: 'presencial',
-      partnerId: 'walmart',
+      trip: 'semana',
+      designatedStoreId: DESIGNATED_WEEKLY.id,
       lines: [],
-      setMode: (mode) => set({ mode }),
-      setPartner: (partnerId) => set({ partnerId, mode: 'enlinea' }),
+      setTrip: (trip) => set({ trip }),
+      setDesignatedStore: (storeId) => set({ designatedStoreId: storeId }),
       add: (sku, qty = 1) =>
         set((state) => {
           const existing = state.lines.find((line) => line.sku.id === sku.id);
@@ -40,16 +40,19 @@ export const useCartStore = create<CartState>()(
           }
           return { lines: [...state.lines, { sku, qty }] };
         }),
+      addMany: (skus) => {
+        for (const sku of skus) get().add(sku);
+      },
       setQty: (id, qty) =>
         set((state) => ({
-          lines: qty <= 0 ? state.lines.filter((line) => line.sku.id !== id) : state.lines.map((line) =>
-            line.sku.id === id ? { ...line, qty } : line
-          ),
+          lines:
+            qty <= 0
+              ? state.lines.filter((line) => line.sku.id !== id)
+              : state.lines.map((line) => (line.sku.id === id ? { ...line, qty } : line)),
         })),
       clear: () => set({ lines: [] }),
-      total: () => get().lines.reduce((sum, line) => sum + line.sku.priceMxn * line.qty, 0),
       count: () => get().lines.reduce((sum, line) => sum + line.qty, 0),
     }),
-    { name: 'espacio-pareja-super-cart-v2' }
+    { name: 'espacio-pareja-super-cart-v3' }
   )
 );

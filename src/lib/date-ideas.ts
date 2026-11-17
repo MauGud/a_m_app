@@ -197,6 +197,8 @@ function mapCita(raw: RawCita): DateIdea {
       ...(raw.momento || []),
       raw.veg_code,
       raw.origen,
+      raw.nota_especifica || '',
+      raw.por_que_vale_la_pena,
     ].map((item) => item.toLowerCase()),
   };
 }
@@ -268,7 +270,7 @@ export function filterDateIdeas(input: {
   weekdayNight?: boolean;
   todayOnly?: boolean;
 }) {
-  const q = (input.query || '').trim().toLowerCase();
+  const parsed = parseSearchQuery(input.query || '');
   const now = mexicoNow();
   const weekday = currentWeekday(now);
   return DATE_IDEAS.filter((idea) => {
@@ -287,11 +289,57 @@ export function filterDateIdeas(input: {
     if (input.season && input.season !== 'todas' && idea.seasonNote) {
       if (!idea.seasonNote.toLowerCase().includes(String(input.season).toLowerCase())) return false;
     }
-    if (!q) return true;
-    const hay = `${idea.title} ${idea.blurb} ${idea.city} ${idea.state} ${idea.kind} ${idea.tags.join(' ')}`.toLowerCase();
-    const tokens = q.split(/\s+/).filter((token) => token.length > 1);
-    return tokens.every((token) => hay.includes(token));
+    if (typeof parsed.maxPrice === 'number' && idea.priceMin > parsed.maxPrice) return false;
+    if (!parsed.tokens.length) return true;
+    const hay = foldText(
+      `${idea.title} ${idea.blurb} ${idea.city} ${idea.state} ${idea.kind} ${idea.seasonNote} ${idea.tags.join(' ')} ${idea.moods.join(' ')}`
+    );
+    const hits = parsed.tokens.filter((token) => hay.includes(token) || tokenSynonyms(token).some((syn) => hay.includes(syn)));
+    return hits.length > 0;
   });
+}
+
+export function foldText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+const FAR_CITIES = ['guadalajara', 'monterrey', 'cancun', 'merida', 'tijuana', 'leon', 'queretaro capital'];
+
+function tokenSynonyms(token: string) {
+  if (token === 'picnic') return ['parque', 'naturaleza', 'chapultepec', 'pasto'];
+  if (token === 'barato' || token === 'barata') return ['gratis', 'bajo'];
+  if (token === 'vegano' || token === 'vegana') return ['vegan', ' vegano', ' v '];
+  if (token === 'condesa') return ['roma', 'hipodromo'];
+  return [token];
+}
+
+function parseSearchQuery(raw: string) {
+  const folded = foldText(raw);
+  const price = folded.match(/menos de\s+(\d+)|\$\s*(\d{2,5})/);
+  const maxPrice = price ? Number(price[1] || price[2]) : undefined;
+  const tokens = folded
+    .replace(/menos de\s+\d+/g, ' ')
+    .split(/\s+/)
+    .filter((token) => token.length > 1 && token !== 'de' && token !== 'en' && token !== 'la' && token !== 'el');
+  return { tokens, maxPrice: Number.isFinite(maxPrice) ? maxPrice : undefined };
+}
+
+export function searchHint(query: string, resultCount: number) {
+  const folded = foldText(query);
+  if (!query.trim()) return '';
+  if (resultCount > 0 && FAR_CITIES.some((city) => folded.includes(city))) {
+    return 'El catálogo cubre CDMX y destinos a 3 horas. Lo de más lejos no entra.';
+  }
+  if (resultCount === 0 && FAR_CITIES.some((city) => folded.includes(city))) {
+    return 'Esa ciudad está fuera del catálogo (CDMX y 3 horas). Prueba Condesa, Roma, Coyoacán o Puebla.';
+  }
+  if (resultCount === 0) {
+    return 'Nada con esas palabras. Prueba una colonia, un platillo o un mood. El momento del día no se aplica hasta que toques Qué hacemos hoy.';
+  }
+  return '';
 }
 
 export function recommendToday(input: Parameters<typeof filterDateIdeas>[0], limit = 12) {

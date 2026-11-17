@@ -128,13 +128,14 @@ export default function SetupPage() {
               <h2 className="text-xl font-semibold text-center mb-2">Código secreto</h2>
               {displayName && (
                 <p className="text-sm text-gray-600 text-center">
-                  Hola {displayName} 💕 El código se pide cada 60 días
+                  Hola {displayName} 💕 Confirma con Entrar. El código se pide cada 60 días.
                 </p>
               )}
               <Input
                 type="password"
-                inputMode="numeric"
-                placeholder="Código de 4 dígitos"
+                inputMode={memberSlot === 'MEMBER_B' ? 'text' : 'numeric'}
+                autoComplete="off"
+                placeholder={memberSlot === 'MEMBER_B' ? 'Tu código' : 'Código de 4 dígitos'}
                 value={secretInput}
                 onChange={(e) => setSecretInput(e.target.value)}
                 onKeyDown={(e) => {
