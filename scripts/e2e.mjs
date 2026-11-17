@@ -279,6 +279,60 @@ async function testAllNav(page) {
   }
 }
 
+async function loginAs(page, who) {
+  await page.goto(`${BASE_URL}/setup`, { waitUntil: 'networkidle' });
+  await waitForText(page, '¿Quién eres?');
+  await page.getByRole('button', { name: who }).click();
+  await waitForText(page, 'Código');
+  const pin = who === 'Mau' ? PIN : '1711';
+  await page.getByPlaceholder(/código/i).fill(pin);
+  await page.getByRole('button', { name: /Entrar/ }).click();
+  await page.waitForURL((url) => !url.pathname.includes('/setup'), { timeout: 20000 });
+  await waitForText(page, `Hola, ${who}`);
+}
+
+async function testLiveSync(browser) {
+  const mauCtx = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    locale: 'es-MX',
+  });
+  const amaCtx = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    locale: 'es-MX',
+  });
+  const mau = await mauCtx.newPage();
+  const ama = await amaCtx.newPage();
+  mau.setDefaultTimeout(20000);
+  ama.setDefaultTimeout(20000);
+  const title = `[live] ${Date.now()}`;
+  try {
+    await loginAs(mau, 'Mau');
+    await loginAs(ama, 'Amanda');
+    await clickNav(mau, 'Calendario');
+    await waitForText(mau, 'Calendario');
+    await clickNav(ama, 'Calendario');
+    await waitForText(ama, 'Calendario');
+    await mau.getByRole('button', { name: /Nueva/ }).click();
+    await mau.getByRole('button', { name: /Renta \/ tarjetas/ }).click();
+    await mau.getByPlaceholder('Renta, Internet, Tarjeta Nu…').fill(title);
+    await mau.getByRole('button', { name: 'Guardar' }).click();
+    await waitForText(mau, title);
+    await ama.getByText(title, { exact: false }).first().waitFor({ timeout: 12000 });
+    log(true, 'Amanda sees Mau calendar item live');
+    const del = mau.getByRole('button', { name: new RegExp(`Eliminar ${title}`) });
+    if (await del.count()) {
+      await del.first().click();
+      const confirm = mau.getByRole('button', { name: 'Eliminar', exact: true });
+      if (await confirm.count()) await confirm.click();
+    }
+  } catch (err) {
+    log(false, 'Amanda sees Mau calendar item live', String(err?.message || err).slice(0, 200));
+  } finally {
+    await mauCtx.close();
+    await amaCtx.close();
+  }
+}
+
 async function testAmandaIsolated(browser) {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
@@ -486,6 +540,76 @@ async function probeSupabase() {
   if (pan.ok) {
     await fetch(`${url}/rest/v1/payment_methods?alias=eq.__probe_pan__`, { method: 'DELETE', headers });
   }
+
+  const liveInstanceId = instRows[0]?.id || instanceId;
+  await probeRealtime(url, key, liveInstanceId, headers);
+}
+
+async function probeRealtime(url, key, instanceId, headers) {
+  const { createClient } = await import('@supabase/supabase-js');
+  const writer = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  const reader = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  const title = `__rt_${Date.now()}__`;
+  const id = crypto.randomUUID();
+  let gotPg = false;
+  let joined = 'pending';
+
+  const channel = reader.channel(`e2e-rt-${id}`).on(
+    'postgres_changes',
+    {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'activities',
+      filter: `instance_id=eq.${instanceId}`,
+    },
+    (payload) => {
+      if (payload.new?.title === title) gotPg = true;
+    }
+  );
+
+  joined = await new Promise((resolve) => {
+    const timer = setTimeout(() => resolve('timeout'), 8000);
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        clearTimeout(timer);
+        resolve(status);
+      }
+    });
+  });
+  log(joined === 'SUBSCRIBED', 'realtime websocket subscribed', String(joined));
+
+  const inserted = await writer.from('activities').insert({
+    id,
+    instance_id: instanceId,
+    title,
+    category: 'pendiente',
+    status: 'pending',
+    due_date: '2099-12-01',
+    recurring: 'none',
+    created_by: 'MEMBER_B',
+  });
+  if (inserted.error) {
+    log(false, 'realtime insert for listener', inserted.error.message);
+  } else {
+    const deadline = Date.now() + 6000;
+    while (Date.now() < deadline && !gotPg) {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    log(gotPg, 'realtime postgres_changes saw partner insert');
+
+    const read = await fetch(`${url}/rest/v1/activities?id=eq.${id}&select=title`, { headers });
+    const rows = read.ok ? await read.json() : [];
+    log(rows[0]?.title === title, 'second client REST sees insert immediately');
+  }
+
+  await writer.from('activities').delete().eq('id', id);
+  await reader.removeChannel(channel);
+  writer.removeAllChannels();
+  reader.removeAllChannels();
 }
 
 async function main() {
@@ -530,6 +654,7 @@ async function main() {
     await shot(page, '06-spark');
     await testRedirects(page);
     await testAmandaIsolated(browser);
+    await testLiveSync(browser);
     await cleanup(page);
   } catch (err) {
     failed += 1;

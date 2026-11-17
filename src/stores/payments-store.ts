@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { supabase, isSupabaseConfigured, logSupabaseError } from '@/lib/supabase';
+import { logSupabaseError } from '@/lib/supabase';
+import { coupleDidChange, listenCoupleTable } from '@/lib/couple-realtime';
 import { useAuthStore } from './auth-store';
 import { useActivitiesStore } from './activities-store';
 import { mergeById } from '@/lib/merge';
@@ -66,6 +67,7 @@ function toDb(payment: PaymentReminder, instanceId: string) {
     created_at: payment.created_at,
     completed_at: payment.completed_at || null,
     notified_at: payment.notified_at || null,
+    updated_at: payment.updated_at || payment.created_at,
   };
 }
 
@@ -102,6 +104,7 @@ export const usePaymentsStore = create<PaymentsState>()(
               if (client) {
                 const { error } = await client.from('payments').insert(toDb(payment, auth.instanceId));
                 if (error) logSupabaseError('payments.insert', error);
+                else coupleDidChange('payments');
               }
             } catch (err) {
               console.warn('Could not sync payment:', err);
@@ -139,8 +142,9 @@ export const usePaymentsStore = create<PaymentsState>()(
               if (client) {
                 await client
                   .from('payments')
-                  .update({ status: 'completed', completed_at: completedAt })
+                  .update({ status: 'completed', completed_at: completedAt, updated_at: completedAt })
                   .eq('id', id);
+                coupleDidChange('payments');
               }
             } catch (err) {
               console.warn('Could not sync payment completion:', err);
@@ -174,7 +178,10 @@ export const usePaymentsStore = create<PaymentsState>()(
           if (auth.instanceId && auth.isOnline) {
             try {
               const client = auth.getSupabase();
-              if (client) await client.from('payments').delete().eq('id', id);
+              if (client) {
+                await client.from('payments').delete().eq('id', id);
+                coupleDidChange('payments');
+              }
             } catch (err) {
               console.warn('Could not sync payment deletion:', err);
             }
@@ -220,26 +227,9 @@ export const usePaymentsStore = create<PaymentsState>()(
       },
 
       subscribeToChanges: () => {
-        const auth = useAuthStore.getState();
-        if (!auth.instanceId || !isSupabaseConfigured() || !supabase) return () => {};
-        const channel = supabase
-          .channel(`payments-changes-${auth.instanceId}`)
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'payments',
-              filter: `instance_id=eq.${auth.instanceId}`,
-            },
-            () => {
-              get().fetchFromSupabase();
-            }
-          )
-          .subscribe();
-        return () => {
-          supabase.removeChannel(channel);
-        };
+        return listenCoupleTable(useAuthStore.getState().instanceId, 'payments', () => {
+          void get().fetchFromSupabase();
+        });
       },
 
       notifyDuePayments: async (member) => {

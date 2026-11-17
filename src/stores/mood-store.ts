@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { supabase, DbMood, isSupabaseConfigured } from '@/lib/supabase';
+import { DbMood } from '@/lib/supabase';
+import { coupleDidChange, listenCoupleTable } from '@/lib/couple-realtime';
+import { mergeByKey } from '@/lib/merge';
 import { useAuthStore } from './auth-store';
 import { daysAgoISO, getTodayISO } from '@/lib/utils';
 import { MOOD_RETENTION_DAYS, type MemberSlot } from '@/lib/constants';
@@ -37,16 +39,7 @@ function pruneMoods(moods: MoodEntry[]): MoodEntry[] {
 }
 
 function mergeMoods(local: MoodEntry[], remote: MoodEntry[]): MoodEntry[] {
-  const map = new Map<string, MoodEntry>();
-  for (const mood of local) map.set(`${mood.member}-${mood.date}`, mood);
-  for (const mood of remote) {
-    const key = `${mood.member}-${mood.date}`;
-    const existing = map.get(key);
-    const remoteTs = Date.parse(mood.updated_at || mood.created_at);
-    const localTs = existing ? Date.parse(existing.updated_at || existing.created_at) : 0;
-    if (!existing || remoteTs >= localTs) map.set(key, mood);
-  }
-  return pruneMoods(Array.from(map.values()));
+  return pruneMoods(mergeByKey(local, remote, (mood) => `${mood.member}-${mood.date}`));
 }
 
 export const useMoodStore = create<MoodState>()(
@@ -91,6 +84,7 @@ export const useMoodStore = create<MoodState>()(
                     date: today,
                     created_at: existing.created_at,
                   }, { onConflict: 'instance_id,member,date' });
+                coupleDidChange('moods');
               }
             } catch (err) {
               console.warn('Could not sync mood update:', err);
@@ -124,6 +118,7 @@ export const useMoodStore = create<MoodState>()(
                   date: newMood.date,
                   created_at: newMood.created_at,
                 }, { onConflict: 'instance_id,member,date' });
+                coupleDidChange('moods');
               }
             } catch (err) {
               console.warn('Could not sync mood:', err);
@@ -173,7 +168,7 @@ export const useMoodStore = create<MoodState>()(
                 note: d.note || undefined,
                 date: d.date,
                 created_at: d.created_at,
-                updated_at: d.created_at,
+                updated_at: (d as DbMood & { updated_at?: string }).updated_at || d.created_at,
               }));
               set({ moods: mergeMoods(get().moods, remote) });
               await client.from('moods').delete().eq('instance_id', auth.instanceId).lt('date', cutoff);
@@ -187,28 +182,9 @@ export const useMoodStore = create<MoodState>()(
       },
 
       subscribeToChanges: () => {
-        const auth = useAuthStore.getState();
-        if (!auth.instanceId || !isSupabaseConfigured() || !supabase) return () => {};
-
-        const channel = supabase
-          .channel(`moods-changes-${auth.instanceId}`)
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'moods',
-              filter: `instance_id=eq.${auth.instanceId}`,
-            },
-            () => {
-              get().fetchFromSupabase();
-            }
-          )
-          .subscribe();
-
-        return () => {
-          supabase.removeChannel(channel);
-        };
+        return listenCoupleTable(useAuthStore.getState().instanceId, 'moods', () => {
+          void get().fetchFromSupabase();
+        });
       },
     }),
     {

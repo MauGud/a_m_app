@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { supabase, DbActivity, isSupabaseConfigured, logSupabaseError } from '@/lib/supabase';
+import { DbActivity, logSupabaseError } from '@/lib/supabase';
+import { coupleDidChange, listenCoupleTable } from '@/lib/couple-realtime';
 import { useAuthStore } from './auth-store';
 import { mergeById } from '@/lib/merge';
 import { getNextDueDate, getTodayISO } from '@/lib/utils';
@@ -75,6 +76,7 @@ function toDbPayload(activity: Activity, instanceId: string) {
     recurring_unit: activity.recurring_unit || 'day',
     recurring_anchor_day: activity.recurring_anchor_day || parseInt(activity.due_date.slice(8, 10), 10),
     extra: activity.extra || {},
+    updated_at: activity.updated_at || activity.created_at,
   };
 }
 
@@ -141,8 +143,15 @@ export const useActivitiesStore = create<ActivitiesState>()(
                     };
                     const retry = await client.from('activities').insert(legacy);
                     if (retry.error) logSupabaseError('activities.insert.legacy', retry.error);
+                    else coupleDidChange('activities');
+                  } else {
+                    coupleDidChange('activities');
                   }
+                } else {
+                  coupleDidChange('activities');
                 }
+              } else {
+                coupleDidChange('activities');
               }
             }
           } catch (err) {
@@ -166,8 +175,13 @@ export const useActivitiesStore = create<ActivitiesState>()(
             const client = auth.getSupabase();
             if (client) {
               const remoteUpdates: Record<string, unknown> = { ...stamped };
-              delete remoteUpdates.updated_at;
-              await client.from('activities').update(remoteUpdates).eq('id', id);
+              const { error } = await client.from('activities').update(remoteUpdates).eq('id', id);
+              if (error) {
+                logSupabaseError('activities.update', error);
+                delete remoteUpdates.updated_at;
+                await client.from('activities').update(remoteUpdates).eq('id', id);
+              }
+              coupleDidChange('activities');
             }
           } catch (err) {
             console.warn('Could not sync activity update:', err);
@@ -186,6 +200,7 @@ export const useActivitiesStore = create<ActivitiesState>()(
             const client = auth.getSupabase();
             if (client) {
               await client.from('activities').delete().eq('id', id);
+              coupleDidChange('activities');
             }
           } catch (err) {
             console.warn('Could not sync activity deletion:', err);
@@ -223,8 +238,10 @@ export const useActivitiesStore = create<ActivitiesState>()(
                   status: 'completed',
                   completed_at: completedAt,
                   completed_by: completedBy,
+                  updated_at: completedAt,
                 })
                 .eq('id', id);
+              coupleDidChange('activities');
             }
           } catch (err) {
             console.warn('Could not sync activity completion:', err);
@@ -342,28 +359,9 @@ export const useActivitiesStore = create<ActivitiesState>()(
       },
 
       subscribeToChanges: () => {
-        const auth = useAuthStore.getState();
-        if (!auth.instanceId || !isSupabaseConfigured() || !supabase) return () => {};
-
-        const channel = supabase
-          .channel(`activities-changes-${auth.instanceId}`)
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'activities',
-              filter: `instance_id=eq.${auth.instanceId}`,
-            },
-            () => {
-              get().fetchFromSupabase();
-            }
-          )
-          .subscribe();
-
-        return () => {
-          supabase.removeChannel(channel);
-        };
+        return listenCoupleTable(useAuthStore.getState().instanceId, 'activities', () => {
+          void get().fetchFromSupabase();
+        });
       },
     }),
     {

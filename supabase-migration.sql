@@ -294,3 +294,36 @@ DROP POLICY IF EXISTS "Users can read push" ON push_subscriptions;
 DROP POLICY IF EXISTS "Users can write push" ON push_subscriptions;
 CREATE POLICY "Users can read push" ON push_subscriptions FOR SELECT USING (true);
 CREATE POLICY "Users can write push" ON push_subscriptions FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE activities ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+DO $$
+DECLARE
+  t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY[
+    'moods',
+    'memories',
+    'sparks',
+    'spark_submissions',
+    'activities',
+    'payments',
+    'finanzas_snapshots',
+    'member_presence',
+    'payment_methods'
+  ]
+  LOOP
+    BEGIN
+      EXECUTE format('ALTER TABLE %I REPLICA IDENTITY FULL', t);
+    EXCEPTION
+      WHEN undefined_table THEN NULL;
+    END;
+    BEGIN
+      EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE %I', t);
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+      WHEN undefined_table THEN NULL;
+    END;
+  END LOOP;
+END $$;

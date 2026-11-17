@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase, getSupabaseWithInstance, isSupabaseConfigured } from '@/lib/supabase';
+import { coupleDidChange } from '@/lib/couple-realtime';
 import { COUPLE_SECRET, MEMBER_NAMES, SECRET_TTL_MS, secretForMember, type MemberSlot } from '@/lib/constants';
 
 interface AuthState {
@@ -165,6 +166,7 @@ export const useAuthStore = create<AuthState>()(
           };
           if (opts?.secret) row.last_secret_at = seenAt;
           await client.from('member_presence').upsert(row);
+          coupleDidChange('member_presence');
         } catch {
           // local last-seen is enough until SQL exists
         }

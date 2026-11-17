@@ -4,21 +4,26 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 const isModernKey = supabaseAnonKey.startsWith('sb_');
+const instanceClients = new Map<string, SupabaseClient>();
 
 function createCoupleClient(extraHeaders?: Record<string, string>): SupabaseClient | null {
   if (!supabaseUrl || !supabaseAnonKey) return null;
 
-  return createClient(supabaseUrl, supabaseAnonKey, {
+  const client = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
       detectSessionInUrl: false,
+    },
+    realtime: {
+      params: { apikey: supabaseAnonKey },
     },
     global: {
       headers: extraHeaders,
       fetch: async (input, init = {}) => {
         const headers = new Headers(init.headers);
         headers.set('apikey', supabaseAnonKey);
+        headers.set('Cache-Control', 'no-store');
         if (isModernKey) {
           const auth = headers.get('Authorization');
           if (auth?.startsWith(`Bearer ${supabaseAnonKey}`) || auth?.startsWith('Bearer sb_')) {
@@ -28,10 +33,15 @@ function createCoupleClient(extraHeaders?: Record<string, string>): SupabaseClie
         if (extraHeaders) {
           Object.entries(extraHeaders).forEach(([key, value]) => headers.set(key, value));
         }
-        return fetch(input, { ...init, headers });
+        return fetch(input, { ...init, cache: 'no-store', headers });
       },
     },
   });
+
+  if (typeof client.realtime?.setAuth === 'function') {
+    void client.realtime.setAuth(supabaseAnonKey);
+  }
+  return client;
 }
 
 let _supabase: SupabaseClient | null = null;
@@ -48,7 +58,11 @@ export function isSupabaseConfigured(): boolean {
 }
 
 export function getSupabaseWithInstance(instanceId: string): SupabaseClient | null {
-  return createCoupleClient({ 'x-instance-id': instanceId });
+  const cached = instanceClients.get(instanceId);
+  if (cached) return cached;
+  const client = createCoupleClient({ 'x-instance-id': instanceId });
+  if (client) instanceClients.set(instanceId, client);
+  return client;
 }
 
 export function logSupabaseError(context: string, error: { message?: string } | null | undefined) {

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { supabase, DbSpark, DbSparkSubmission, uploadImage, isSupabaseConfigured, logSupabaseError } from '@/lib/supabase';
+import { DbSpark, DbSparkSubmission, uploadImage, logSupabaseError } from '@/lib/supabase';
+import { coupleDidChange, listenCoupleTable } from '@/lib/couple-realtime';
 import { useAuthStore } from './auth-store';
 import { getTodayISO } from '@/lib/utils';
 import type { MemberSlot } from '@/lib/constants';
@@ -67,20 +68,9 @@ function mergeSparks(local: Spark[], remote: Spark[]): Spark[] {
   return Array.from(map.values());
 }
 
-async function broadcastSpark(instanceId: string, date: string) {
-  if (!isSupabaseConfigured() || !supabase) return;
-  try {
-    const topic = `sparks-live-${instanceId}`;
-    const channel = supabase.getChannels().find((ch) => String(ch.topic).includes(topic));
-    if (!channel) return;
-    await channel.send({
-      type: 'broadcast',
-      event: 'spark-sync',
-      payload: { date },
-    });
-  } catch (err) {
-    console.warn('Could not broadcast spark:', err);
-  }
+function broadcastSpark() {
+  coupleDidChange('sparks');
+  coupleDidChange('spark_submissions');
 }
 
 export const useSparkStore = create<SparkState>()(
@@ -140,7 +130,7 @@ export const useSparkStore = create<SparkState>()(
                   await get().fetchFromSupabase();
                 }
               }
-              await broadcastSpark(auth.instanceId, today);
+              broadcastSpark();
             }
           } catch (err) {
             console.warn('Could not sync spark:', err);
@@ -212,7 +202,7 @@ export const useSparkStore = create<SparkState>()(
                 revealed_at: revealedAt || null,
               });
             }
-            await broadcastSpark(auth.instanceId, today);
+            broadcastSpark();
             await get().fetchFromSupabase();
           } catch (err) {
             console.warn('Could not sync spark submission:', err);
@@ -276,47 +266,13 @@ export const useSparkStore = create<SparkState>()(
       },
 
       subscribeToChanges: () => {
-        const auth = useAuthStore.getState();
-        if (!auth.instanceId || !isSupabaseConfigured() || !supabase) return () => {};
-
-        const refetch = () => {
-          get().fetchFromSupabase();
-        };
-
-        const pgChannel = supabase
-          .channel(`sparks-changes-${auth.instanceId}`)
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'sparks',
-              filter: `instance_id=eq.${auth.instanceId}`,
-            },
-            refetch
-          )
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'spark_submissions',
-            },
-            refetch
-          )
-          .subscribe();
-
-        const liveChannel = supabase
-          .channel(`sparks-live-${auth.instanceId}`, {
-            config: { broadcast: { self: false } },
-          })
-          .on('broadcast', { event: 'spark-sync' }, refetch)
-          .subscribe();
-
-        return () => {
-          supabase.removeChannel(pgChannel);
-          supabase.removeChannel(liveChannel);
-        };
+        return listenCoupleTable(
+          useAuthStore.getState().instanceId,
+          ['sparks', 'spark_submissions'],
+          () => {
+            void get().fetchFromSupabase();
+          }
+        );
       },
     }),
     {

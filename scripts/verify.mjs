@@ -69,15 +69,21 @@ function getNextDueDate(dueDate, recurring, interval = 1, unit = 'day', anchorDa
   return getLocalISODate(next);
 }
 
-function mergeById(local, remote) {
-  if (remote.length === 0) return local;
+const MERGE_PENDING_MS = 45_000;
+function timestampOf(item) {
+  const t = Date.parse(item.updated_at || item.created_at || 0);
+  return Number.isFinite(t) ? t : 0;
+}
+function mergeById(local, remote, now = Date.now()) {
   const map = new Map();
-  for (const item of local) map.set(item.id, item);
-  for (const item of remote) {
-    const existing = map.get(item.id);
-    const remoteTs = Date.parse(item.updated_at || item.created_at || 0);
-    const localTs = existing ? Date.parse(existing.updated_at || existing.created_at || 0) : 0;
-    if (!existing || remoteTs >= localTs) map.set(item.id, item);
+  for (const item of remote) map.set(item.id, item);
+  for (const item of local) {
+    const remoteItem = map.get(item.id);
+    if (remoteItem) {
+      if (timestampOf(item) > timestampOf(remoteItem)) map.set(item.id, item);
+      continue;
+    }
+    if (timestampOf(item) >= now - MERGE_PENDING_MS) map.set(item.id, item);
   }
   return Array.from(map.values());
 }
@@ -107,16 +113,33 @@ assert('custom every 2 weeks', getNextDueDate('2026-01-01', 'custom', 2, 'week')
 assert('none returns null', getNextDueDate('2026-01-01', 'none') === null);
 
 assert(
-  'merge keeps local when remote empty',
-  mergeById([{ id: 'a', title: 'local' }], []).length === 1
+  'merge drops stale local when remote empty',
+  mergeById([{ id: 'a', title: 'local', created_at: '2020-01-01T00:00:00Z' }], []).length === 0
+);
+assert(
+  'merge keeps in-flight local when remote empty',
+  mergeById([{ id: 'a', title: 'pending', created_at: new Date().toISOString() }], []).length === 1
 );
 const merged = mergeById(
-  [{ id: 'a', title: 'old' }, { id: 'b', title: 'only-local' }],
-  [{ id: 'a', title: 'remote' }, { id: 'c', title: 'only-remote' }]
+  [
+    { id: 'a', title: 'old', created_at: '2020-01-01T00:00:00Z' },
+    { id: 'b', title: 'only-local', created_at: '2020-01-01T00:00:00Z' },
+  ],
+  [
+    { id: 'a', title: 'remote', created_at: '2026-01-01T00:00:00Z' },
+    { id: 'c', title: 'only-remote', created_at: '2026-01-01T00:00:00Z' },
+  ]
 );
 assert('merge remote wins on id', merged.find((x) => x.id === 'a').title === 'remote');
-assert('merge keeps local-only', merged.some((x) => x.id === 'b'));
+assert('merge drops stale local-only', !merged.some((x) => x.id === 'b'));
 assert('merge adds remote-only', merged.some((x) => x.id === 'c'));
+assert(
+  'merge keeps in-flight local-only',
+  mergeById(
+    [{ id: 'z', title: 'pending', created_at: new Date().toISOString() }],
+    [{ id: 'a', title: 'remote', created_at: '2026-01-01T00:00:00Z' }]
+  ).some((x) => x.id === 'z')
+);
 assert(
   'merge keeps newer local over stale remote',
   mergeById(
@@ -292,6 +315,19 @@ assert('moods pruned to 30 days', mood.includes('MOOD_RETENTION_DAYS'));
 
 const supabaseClient = readFileSync(join(root, 'src/lib/supabase.ts'), 'utf8');
 assert('modern supabase keys strip Bearer sb_', supabaseClient.includes('Bearer sb_'));
+assert('supabase clients are cached per instance', supabaseClient.includes('instanceClients'));
+
+const coupleRealtime = readFileSync(join(root, 'src/lib/couple-realtime.ts'), 'utf8');
+assert('one couple realtime channel', coupleRealtime.includes('couple-live-'));
+assert('realtime retries CHANNEL_ERROR', coupleRealtime.includes('CHANNEL_ERROR'));
+assert('writes broadcast couple change', coupleRealtime.includes('coupleDidChange'));
+
+const syncProvider = readFileSync(join(root, 'src/components/sync-provider.tsx'), 'utf8');
+assert('sync resumes on visibility', syncProvider.includes('visibilitychange'));
+assert('sync polls faster until realtime is live', syncProvider.includes('liveRef'));
+
+const realtimeSql = readFileSync(join(root, 'supabase-realtime.sql'), 'utf8');
+assert('realtime sql sets replica identity full', realtimeSql.includes('REPLICA IDENTITY FULL'));
 
 const gallery = readFileSync(join(root, 'src/app/recuerdos/nuevo/page.tsx'), 'utf8');
 assert('recuerdos save to device gallery', gallery.includes('saveImagesToDeviceGallery'));

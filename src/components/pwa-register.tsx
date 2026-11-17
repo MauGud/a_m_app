@@ -13,12 +13,26 @@ export function PwaRegister() {
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
-      console.warn('SW register failed, retrying:', err);
-      setTimeout(() => {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
-      }, 2500);
-    });
+    const register = () =>
+      navigator.serviceWorker.register('/sw.js').catch((err) => {
+        console.warn('SW register failed, retrying:', err);
+        setTimeout(() => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        }, 2500);
+      });
+    void register();
+    const refresh = () => {
+      navigator.serviceWorker.getRegistration().then((reg) => reg?.update()).catch(() => {});
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
   useEffect(() => {

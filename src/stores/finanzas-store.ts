@@ -6,7 +6,8 @@ import {
   parseMirrorPayload,
   type FinanceSnapshot,
 } from '@/lib/finanzas';
-import { supabase, isSupabaseConfigured, logSupabaseError } from '@/lib/supabase';
+import { logSupabaseError } from '@/lib/supabase';
+import { coupleDidChange, listenCoupleTable } from '@/lib/couple-realtime';
 import { useAuthStore } from './auth-store';
 import { assertSafeToPersist, safeLog } from '@/lib/security';
 
@@ -169,6 +170,7 @@ export const useFinanzasStore = create<FinanzasState>()(
             heartbeat_at: new Date().toISOString(),
           });
           if (error) logSupabaseError('finanzas.upsert', error);
+          else coupleDidChange('finanzas_snapshots');
         } catch (err) {
           safeLog('finanzas push', err);
         }
@@ -216,26 +218,9 @@ export const useFinanzasStore = create<FinanzasState>()(
       },
 
       subscribeToChanges: () => {
-        const auth = useAuthStore.getState();
-        if (!auth.instanceId || !isSupabaseConfigured() || !supabase) return () => {};
-        const channel = supabase
-          .channel(`finanzas-${auth.instanceId}`)
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'finanzas_snapshots',
-              filter: `instance_id=eq.${auth.instanceId}`,
-            },
-            () => {
-              get().fetchFromSupabase();
-            }
-          )
-          .subscribe();
-        return () => {
-          supabase.removeChannel(channel);
-        };
+        return listenCoupleTable(useAuthStore.getState().instanceId, 'finanzas_snapshots', () => {
+          void get().fetchFromSupabase();
+        });
       },
     }),
     {

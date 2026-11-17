@@ -1,3 +1,5 @@
+const SW_VERSION = 'live-sync-1';
+
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting());
 });

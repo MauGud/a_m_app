@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useMoodStore } from '@/stores/mood-store';
 import { useMemoriesStore } from '@/stores/memories-store';
@@ -10,6 +10,7 @@ import { usePaymentsStore } from '@/stores/payments-store';
 import { useFinanzasStore } from '@/stores/finanzas-store';
 import { useVaultStore } from '@/stores/vault-store';
 import { isSupabaseConfigured } from '@/lib/supabase';
+import { listenCoupleTable, onCoupleRealtimeStatus } from '@/lib/couple-realtime';
 import { DateReminders } from '@/components/date-reminders';
 import { SessionWatch } from '@/components/session-watch';
 
@@ -36,6 +37,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const finanzasFetch = useFinanzasStore((s) => s.fetchFromSupabase);
   const vaultSubscribe = useVaultStore((s) => s.subscribeToChanges);
   const vaultFetch = useVaultStore((s) => s.fetchFromSupabase);
+  const liveRef = useRef(false);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -71,13 +73,18 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    moodsFetch();
-    memoriesFetch();
-    sparksFetch();
-    activitiesFetch();
-    paymentsFetch();
-    finanzasFetch();
-    vaultFetch();
+    const fetchAll = () => {
+      moodsFetch();
+      memoriesFetch();
+      sparksFetch();
+      activitiesFetch();
+      paymentsFetch();
+      finanzasFetch();
+      vaultFetch();
+      void useAuthStore.getState().fetchPresence();
+    };
+
+    fetchAll();
 
     const unsubscribers = [
       moodsSubscribe(),
@@ -87,21 +94,41 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       paymentsSubscribe(),
       finanzasSubscribe(),
       vaultSubscribe(),
+      listenCoupleTable(instanceId, 'member_presence', () => {
+        void useAuthStore.getState().fetchPresence();
+      }),
     ];
 
-    const poll = setInterval(() => {
-      moodsFetch();
-      memoriesFetch();
-      sparksFetch();
-      activitiesFetch();
-      paymentsFetch();
-      finanzasFetch();
-      vaultFetch();
-    }, 5000);
+    const armPoll = () => {
+      return setInterval(fetchAll, liveRef.current ? 12_000 : 2500);
+    };
+
+    let poll = armPoll();
+    const unsubStatus = onCoupleRealtimeStatus((live) => {
+      liveRef.current = live;
+      clearInterval(poll);
+      poll = armPoll();
+    });
+
+    const onResume = () => {
+      fetchAll();
+      void useAuthStore.getState().recordPresence();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') onResume();
+    };
+
+    window.addEventListener('focus', onResume);
+    window.addEventListener('online', onResume);
+    document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
       unsubscribers.forEach((unsub) => unsub());
+      unsubStatus();
       clearInterval(poll);
+      window.removeEventListener('focus', onResume);
+      window.removeEventListener('online', onResume);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [
     hasHydrated,

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { supabase, isSupabaseConfigured, logSupabaseError } from '@/lib/supabase';
+import { logSupabaseError } from '@/lib/supabase';
+import { coupleDidChange, listenCoupleTable } from '@/lib/couple-realtime';
 import { useAuthStore } from './auth-store';
 import { mergeById } from '@/lib/merge';
 import {
@@ -64,6 +65,7 @@ export const useVaultStore = create<VaultState>()(
             if (!client) return;
             const { error } = await client.from('payment_methods').insert(toDb(method, auth.instanceId));
             if (error) logSupabaseError('payment_methods.insert', error);
+            else coupleDidChange('payment_methods');
           } catch (err) {
             safeLog('vault insert', err);
           }
@@ -78,7 +80,10 @@ export const useVaultStore = create<VaultState>()(
           if (!auth.instanceId || !auth.isOnline) return;
           try {
             const client = auth.getSupabase();
-            if (client) await client.from('payment_methods').delete().eq('id', id);
+            if (client) {
+              await client.from('payment_methods').delete().eq('id', id);
+              coupleDidChange('payment_methods');
+            }
           } catch (err) {
             safeLog('vault delete', err);
           }
@@ -125,21 +130,9 @@ export const useVaultStore = create<VaultState>()(
       },
 
       subscribeToChanges: () => {
-        const auth = useAuthStore.getState();
-        if (!auth.instanceId || !isSupabaseConfigured() || !supabase) return () => {};
-        const channel = supabase
-          .channel(`vault-${auth.instanceId}`)
-          .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'payment_methods', filter: `instance_id=eq.${auth.instanceId}` },
-            () => {
-              get().fetchFromSupabase();
-            }
-          )
-          .subscribe();
-        return () => {
-          supabase.removeChannel(channel);
-        };
+        return listenCoupleTable(useAuthStore.getState().instanceId, 'payment_methods', () => {
+          void get().fetchFromSupabase();
+        });
       },
     }),
     {

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { supabase, DbMemory, uploadImage, isSupabaseConfigured } from '@/lib/supabase';
+import { DbMemory, uploadImage } from '@/lib/supabase';
+import { coupleDidChange, listenCoupleTable } from '@/lib/couple-realtime';
 import { useAuthStore } from './auth-store';
 import { mergeById } from '@/lib/merge';
 import type { MemberSlot } from '@/lib/constants';
@@ -75,6 +76,7 @@ export const useMemoriesStore = create<MemoriesState>()(
                     created_by: memory.created_by,
                     created_at: newMemory.created_at,
                   });
+                  coupleDidChange('memories');
                 }
               }
             } catch (err) {
@@ -95,6 +97,7 @@ export const useMemoriesStore = create<MemoriesState>()(
             const client = auth.getSupabase();
             if (client) {
               await client.from('memories').delete().eq('id', id);
+              coupleDidChange('memories');
             }
           } catch (err) {
             console.warn('Could not sync memory deletion:', err);
@@ -151,28 +154,9 @@ export const useMemoriesStore = create<MemoriesState>()(
       },
 
       subscribeToChanges: () => {
-        const auth = useAuthStore.getState();
-        if (!auth.instanceId || !isSupabaseConfigured() || !supabase) return () => {};
-
-        const channel = supabase
-          .channel(`memories-changes-${auth.instanceId}`)
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'memories',
-              filter: `instance_id=eq.${auth.instanceId}`,
-            },
-            () => {
-              get().fetchFromSupabase();
-            }
-          )
-          .subscribe();
-
-        return () => {
-          supabase.removeChannel(channel);
-        };
+        return listenCoupleTable(useAuthStore.getState().instanceId, 'memories', () => {
+          void get().fetchFromSupabase();
+        });
       },
     }),
     {
