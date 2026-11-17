@@ -7,11 +7,17 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { SectionIntro } from '@/components/ui/section-intro';
 import { useMemoriesStore } from '@/stores/memories-store';
+import { isFixtureCaption, isRemoteMediaUrl } from '@/lib/fixtures';
 import { formatDate, formatDateTime } from '@/lib/utils';
 import { mapsUrl } from '@/lib/geo';
 
 export default function RecuerdosPage() {
-  const memories = useMemoriesStore((s) => s.memories);
+  const memories = useMemoriesStore((s) => s.memories).filter(
+    (memory) =>
+      !isFixtureCaption(memory.caption) &&
+      isRemoteMediaUrl(memory.image_front) &&
+      isRemoteMediaUrl(memory.image_back)
+  );
   const deleteMemory = useMemoriesStore((s) => s.deleteMemory);
   const sorted = [...memories].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DbMemory, uploadImage } from '@/lib/supabase';
 import { coupleDidChange, listenCoupleTable } from '@/lib/couple-realtime';
+import { isFixtureCaption, isRemoteMediaUrl } from '@/lib/fixtures';
 import { useAuthStore } from './auth-store';
 import { mergeById } from '@/lib/merge';
 import type { MemberSlot } from '@/lib/constants';
@@ -33,6 +34,11 @@ interface MemoriesState {
   subscribeToChanges: () => () => void;
 }
 
+function isKeptMemory(memory: Memory) {
+  if (isFixtureCaption(memory.caption)) return false;
+  return isRemoteMediaUrl(memory.image_front) && isRemoteMediaUrl(memory.image_back);
+}
+
 export const useMemoriesStore = create<MemoriesState>()(
   persist(
     (set, get) => ({
@@ -51,38 +57,48 @@ export const useMemoriesStore = create<MemoriesState>()(
         }));
 
         const auth = useAuthStore.getState();
-        if (auth.instanceId && auth.isOnline) {
-          void (async () => {
-            try {
-              const timestamp = Date.now();
-              const [frontUrl, backUrl] = await Promise.all([
-                uploadImage('memories', memory.image_front, `${auth.instanceId}/${timestamp}_front.jpg`),
-                uploadImage('memories', memory.image_back, `${auth.instanceId}/${timestamp}_back.jpg`),
-              ]);
+        if (!auth.instanceId || !auth.isOnline) return;
 
-              if (frontUrl && backUrl) {
-                const client = auth.getSupabase();
-                if (client) {
-                  await client.from('memories').insert({
-                    id: newMemory.id,
-                    instance_id: auth.instanceId,
-                    image_front_url: frontUrl,
-                    image_back_url: backUrl,
-                    caption: memory.caption || null,
-                    date_id: memory.date_id || null,
-                    latitude: memory.location?.latitude || null,
-                    longitude: memory.location?.longitude || null,
-                    address: memory.location?.address || null,
-                    created_by: memory.created_by,
-                    created_at: newMemory.created_at,
-                  });
-                  coupleDidChange('memories');
-                }
-              }
-            } catch (err) {
-              console.warn('Could not sync memory:', err);
-            }
-          })();
+        try {
+          const timestamp = Date.now();
+          const [frontUrl, backUrl] = await Promise.all([
+            uploadImage('memories', memory.image_front, `${auth.instanceId}/${timestamp}_front.jpg`),
+            uploadImage('memories', memory.image_back, `${auth.instanceId}/${timestamp}_back.jpg`),
+          ]);
+
+          if (!frontUrl || !backUrl) {
+            throw new Error('No se pudieron subir las fotos');
+          }
+
+          const client = auth.getSupabase();
+          if (!client) return;
+          const { error } = await client.from('memories').insert({
+            id: newMemory.id,
+            instance_id: auth.instanceId,
+            image_front_url: frontUrl,
+            image_back_url: backUrl,
+            caption: memory.caption || null,
+            date_id: memory.date_id || null,
+            latitude: memory.location?.latitude || null,
+            longitude: memory.location?.longitude || null,
+            address: memory.location?.address || null,
+            created_by: memory.created_by,
+            created_at: newMemory.created_at,
+          });
+          if (error) {
+            throw new Error(error.message || 'No se pudo guardar el recuerdo');
+          }
+          set((state) => ({
+            memories: state.memories.map((item) =>
+              item.id === newMemory.id ? { ...item, image_front: frontUrl, image_back: backUrl } : item
+            ),
+          }));
+          coupleDidChange('memories');
+        } catch (err) {
+          set((state) => ({
+            memories: state.memories.filter((item) => item.id !== newMemory.id),
+          }));
+          throw err;
         }
       },
 
@@ -143,7 +159,11 @@ export const useMemoriesStore = create<MemoriesState>()(
                 created_by: d.created_by,
                 created_at: d.created_at,
               }));
-              set({ memories: mergeById(get().memories, remote) });
+              const keptRemote = remote.filter(isKeptMemory);
+              const pendingLocal = get().memories.filter(
+                (item) => !isKeptMemory(item) && !isFixtureCaption(item.caption)
+              );
+              set({ memories: mergeById(pendingLocal, keptRemote) });
             }
           }
         } catch (err) {
@@ -160,8 +180,8 @@ export const useMemoriesStore = create<MemoriesState>()(
       },
     }),
     {
-      name: 'espacio-pareja-memories',
-      partialize: (state) => ({ memories: state.memories }),
+      name: 'espacio-pareja-memories-v2',
+      partialize: (state) => ({ memories: state.memories.filter(isKeptMemory) }),
     }
   )
 );

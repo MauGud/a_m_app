@@ -139,6 +139,8 @@ function NuevoRecuerdoInner() {
       });
       await Promise.race([gallery, new Promise((resolve) => setTimeout(resolve, 2500))]);
       router.push('/recuerdos');
+    } catch (err) {
+      console.warn('Could not save memory:', err);
     } finally {
       setSaving(false);
     }

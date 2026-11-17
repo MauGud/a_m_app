@@ -331,6 +331,13 @@ assert('realtime sql sets replica identity full', realtimeSql.includes('REPLICA 
 
 const gallery = readFileSync(join(root, 'src/app/recuerdos/nuevo/page.tsx'), 'utf8');
 assert('recuerdos save to device gallery', gallery.includes('saveImagesToDeviceGallery'));
+const memoriesStore = readFileSync(join(root, 'src/stores/memories-store.ts'), 'utf8');
+assert('memories persist ignores local demo blobs', memoriesStore.includes('espacio-pareja-memories-v2'));
+assert('memories skip fixture captions', memoriesStore.includes('isFixtureCaption'));
+assert('memories broadcast after upload', memoriesStore.includes("coupleDidChange('memories')"));
+const fixtures = readFileSync(join(root, 'src/lib/fixtures.ts'), 'utf8');
+assert('fixture helper flags e2e recuerdo captions', fixtures.includes('recuerdo \\d{10,}'));
+assert('album hides local data urls', readFileSync(join(root, 'src/app/recuerdos/page.tsx'), 'utf8').includes('isRemoteMediaUrl'));
 
 const envExample = readFileSync(join(root, '.env.local.example'), 'utf8');
 assert('env example has supabase url', envExample.includes('NEXT_PUBLIC_SUPABASE_URL'));

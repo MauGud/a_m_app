@@ -276,8 +276,13 @@ export const useSparkStore = create<SparkState>()(
       },
     }),
     {
-      name: 'espacio-pareja-sparks',
-      partialize: (state) => ({ sparks: state.sparks }),
+      name: 'espacio-pareja-sparks-v2',
+      partialize: (state) => ({
+        sparks: state.sparks.map((spark) => ({
+          ...spark,
+          submissions: spark.submissions.filter((sub) => /^https:\/\//i.test(sub.image)),
+        })),
+      }),
     }
   )
 );

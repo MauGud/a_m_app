@@ -449,6 +449,32 @@ async function cleanup(page) {
     }
   }
   log(true, 'cleanup attempted for e2e titles');
+  await cleanupSupabaseFixtures();
+}
+
+async function cleanupSupabaseFixtures() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return;
+  const headers = { apikey: key, Accept: 'application/json' };
+  const hash = secretHash();
+  const inst = await fetch(`${url}/rest/v1/instances?secret_hash=eq.${hash}&select=id`, { headers });
+  const instRows = inst.ok ? await inst.json() : [];
+  const instanceId = instRows[0]?.id;
+  if (!instanceId) return;
+  const mem = await fetch(
+    `${url}/rest/v1/memories?select=id,caption&instance_id=eq.${instanceId}`,
+    { headers }
+  );
+  const rows = mem.ok ? await mem.json() : [];
+  let removed = 0;
+  for (const row of rows) {
+    const caption = String(row.caption || '');
+    if (!/^recuerdo \d{10,}$/i.test(caption) && !/\[(e2e|live)\]/i.test(caption)) continue;
+    const del = await fetch(`${url}/rest/v1/memories?id=eq.${row.id}`, { method: 'DELETE', headers });
+    if (del.ok) removed += 1;
+  }
+  log(true, 'cleanup e2e recuerdos from supabase', `removed=${removed}`);
 }
 
 async function probeSupabase() {
@@ -489,6 +515,7 @@ async function probeSupabase() {
   const inst = await fetch(`${url}/rest/v1/instances?secret_hash=eq.${hash}&select=id`, { headers });
   const instRows = inst.ok ? await inst.json() : [];
   log(inst.ok, 'instance lookup by secret_hash', inst.ok ? `rows=${instRows.length}` : String(inst.status));
+  await cleanupSupabaseFixtures();
 
   const probe = await fetch(`${url}/rest/v1/activities`, {
     method: 'POST',
@@ -662,6 +689,7 @@ async function main() {
     await shot(page, 'error').catch(() => {});
     writeFileSync(join(outDir, 'error.txt'), String(err?.stack || err));
   } finally {
+    await cleanupSupabaseFixtures().catch(() => {});
     await browser.close();
   }
 
