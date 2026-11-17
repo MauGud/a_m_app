@@ -130,6 +130,18 @@ export default function HomePage() {
           </Link>
         )}
 
+        <Link href="/departamento">
+          <Card className="p-4 hover:shadow-md transition-all">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🏡</span>
+              <div>
+                <p className="font-medium text-gray-800">Cosas del departamento</p>
+                <p className="text-sm text-gray-600">Dirección, presupuesto y pagos</p>
+              </div>
+            </div>
+          </Card>
+        </Link>
+
         <div className="grid grid-cols-2 gap-4">
           <Link href="/spark">
             <Card className="p-4 bg-gradient-to-br from-pastel-pink-50 to-pastel-blue-50 hover:shadow-md transition-all">

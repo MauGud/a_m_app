@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { href: '/', label: 'Home', icon: '🏠' },
   { href: '/dates', label: 'Dates', icon: '💕' },
   { href: '/calendario', label: 'Calendario', icon: '📅' },
+  { href: '/departamento', label: 'Depto', icon: '🏡' },
   { href: '/recuerdos', label: 'Recuerdos', icon: '📸' },
   { href: '/spark', label: 'Spark', icon: '✨' },
   { href: '/mood', label: 'Mood', icon: '😊' },
@@ -24,7 +25,8 @@ export function BottomNav() {
             const isActive =
               item.href === '/'
                 ? pathname === '/'
-                : pathname === item.href || pathname.startsWith(`${item.href}/`) ||
+                : pathname === item.href ||
+                  pathname.startsWith(`${item.href}/`) ||
                   (item.href === '/dates' && pathname === '/planes') ||
                   (item.href === '/recuerdos' && pathname === '/camara');
             return (

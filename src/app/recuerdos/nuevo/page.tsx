@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -13,18 +13,36 @@ import { cn, formatDateTime, getTodayISO } from '@/lib/utils';
 import { reverseGeocode, type GeoLocation } from '@/lib/geo';
 import { saveImagesToDeviceGallery } from '@/lib/gallery';
 import { useUserMedia } from '@/lib/use-user-media';
+import { useDateExtraStore } from '@/stores/date-extra-store';
+import { useUsageStore } from '@/stores/usage-store';
 
 type CaptureStep = 'ready' | 'capturing_back' | 'capturing_front' | 'preview' | 'details';
 
-export default function NuevoRecuerdoPage() {
+function NuevoRecuerdoInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { memberSlot } = useAuthStore();
   const { addMemory } = useMemoriesStore();
+  const patchExtra = useDateExtraStore((s) => s.patchExtra);
+  const track = useUsageStore((s) => s.track);
+  const dateId = searchParams.get('dateId') || '';
+  const presetTitle = searchParams.get('title') || '';
+  const presetDescription = searchParams.get('description') || '';
 
   const [step, setStep] = useState<CaptureStep>('ready');
   const [imageBack, setImageBack] = useState<string | null>(null);
   const [imageFront, setImageFront] = useState<string | null>(null);
-  const [caption, setCaption] = useState('');
+  const [memoryTitle, setMemoryTitle] = useState(presetTitle);
+  const [memoryNote, setMemoryNote] = useState(presetDescription);
+  const [caption, setCaption] = useState(presetTitle || presetDescription);
+
+  useEffect(() => {
+    if (presetTitle) setMemoryTitle(presetTitle);
+    if (presetDescription) setMemoryNote(presetDescription);
+    if (presetTitle || presetDescription) {
+      setCaption(presetTitle || presetDescription);
+    }
+  }, [presetTitle, presetDescription]);
   const [location, setLocation] = useState<GeoLocation | null>(null);
   const [locationLabel, setLocationLabel] = useState('Buscando lugar...');
   const [placeStatus, setPlaceStatus] = useState<'idle' | 'loading' | 'ready' | 'unavailable'>('idle');
@@ -97,13 +115,22 @@ export default function NuevoRecuerdoPage() {
     setSaving(true);
     try {
       const stamp = getTodayISO();
+      const finalCaption = [memoryTitle.trim() || presetTitle, memoryNote.trim() || caption.trim()]
+        .filter(Boolean)
+        .join(' · ');
       await addMemory({
         image_back: imageBack,
         image_front: imageFront,
-        caption: caption || undefined,
+        caption: finalCaption || undefined,
+        date_id: dateId || undefined,
         location: location || undefined,
         created_by: memberSlot,
       });
+      if (dateId) {
+        const created = useMemoriesStore.getState().memories[0];
+        if (created) patchExtra(dateId, { memoryId: created.id, photoNudges: 10 });
+      }
+      track(memberSlot, 'recuerdos', dateId ? `date:${dateId}` : 'nuevo');
       const gallery = saveImagesToDeviceGallery([
         { dataUrl: imageBack, filename: `recuerdo-${stamp}-lugar.jpg` },
         { dataUrl: imageFront, filename: `recuerdo-${stamp}-nosotros.jpg` },
@@ -123,8 +150,9 @@ export default function NuevoRecuerdoPage() {
         {step === 'ready' && (
           <div className="space-y-6">
             <SectionIntro emoji="📸" title="Un instante, dos miradas">
-              Capturen lo que ven y cómo se ven ustedes. Cada recuerdo guarda fecha y lugar, y las
-              fotos se descargan solas a la galería del teléfono.
+              {presetTitle
+                ? `Este recuerdo nace del date “${presetTitle}”. El título y la nota ya vienen listos; solo tomen las fotos.`
+                : 'Capturen lo que ven y cómo se ven ustedes. Cada recuerdo guarda fecha y lugar, y las fotos se descargan solas a la galería del teléfono.'}
             </SectionIntro>
             <div className="flex flex-col items-center justify-center min-h-[40vh]">
               <div className="text-center mb-8">
@@ -231,9 +259,14 @@ export default function NuevoRecuerdoPage() {
             </div>
 
             <Input
-              placeholder="Escribe un caption (opcional)"
-              value={caption}
-              onChange={(e) => setCaption(e.target.value)}
+              placeholder="Título"
+              value={memoryTitle}
+              onChange={(e) => setMemoryTitle(e.target.value)}
+            />
+            <Input
+              placeholder="Una nota corta"
+              value={memoryNote}
+              onChange={(e) => setMemoryNote(e.target.value)}
             />
 
             <Button onClick={handleSave} className="w-full" size="lg" disabled={saving || placeStatus === 'loading'}>
@@ -243,5 +276,13 @@ export default function NuevoRecuerdoPage() {
         )}
       </div>
     </AppLayout>
+  );
+}
+
+export default function NuevoRecuerdoPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">📸</div>}>
+      <NuevoRecuerdoInner />
+    </Suspense>
   );
 }

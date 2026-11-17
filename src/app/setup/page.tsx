@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card';
 import { useAuthStore } from '@/stores/auth-store';
 import { cn } from '@/lib/utils';
 import { MEMBER_NAMES, type MemberSlot } from '@/lib/constants';
+import { BrandMark } from '@/components/brand/brand-mark';
 
 type Step = 'member' | 'secret';
 
@@ -70,7 +71,8 @@ export default function SetupPage() {
     <div className="min-h-screen flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">💕 A & M</h1>
+          <BrandMark size={72} className="mx-auto mb-3" />
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">A & M</h1>
           <p className="text-gray-600">Nuestro espacio privado</p>
         </div>
 

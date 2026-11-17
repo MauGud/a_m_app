@@ -11,6 +11,7 @@ import type {
   RecurringUnit,
 } from '@/lib/constants';
 import { DATE_GOAL_CATEGORIES } from '@/lib/constants';
+import type { DateExtra } from '@/stores/date-extra-store';
 
 export type { ActivityCategory, RecurringType, RecurringUnit };
 
@@ -32,6 +33,7 @@ export interface Activity {
   recurring_unit?: RecurringUnit;
   recurring_anchor_day?: number;
   updated_at?: string;
+  extra?: DateExtra;
 }
 
 interface ActivitiesState {
@@ -40,7 +42,7 @@ interface ActivitiesState {
 
   addActivity: (
     input: Omit<Activity, 'id' | 'status' | 'created_at' | 'completed_at' | 'completed_by'>
-  ) => Promise<void>;
+  ) => Promise<Activity>;
   updateActivity: (id: string, updates: Partial<Activity>) => Promise<void>;
   deleteActivity: (id: string) => Promise<void>;
   completeActivity: (id: string, completedBy: MemberSlot) => Promise<void>;
@@ -72,6 +74,7 @@ function toDbPayload(activity: Activity, instanceId: string) {
     recurring_interval: activity.recurring_interval || 1,
     recurring_unit: activity.recurring_unit || 'day',
     recurring_anchor_day: activity.recurring_anchor_day || parseInt(activity.due_date.slice(8, 10), 10),
+    extra: activity.extra || {},
   };
 }
 
@@ -108,31 +111,37 @@ export const useActivitiesStore = create<ActivitiesState>()(
               if (error) {
                 logSupabaseError('activities.insert', error);
                 const payload = toDbPayload(newActivity, auth.instanceId);
-                const withoutAnchor: Record<string, unknown> = { ...payload };
-                delete withoutAnchor.recurring_anchor_day;
-                const mid = await client.from('activities').insert(withoutAnchor);
-                if (mid.error) {
-                  logSupabaseError('activities.insert.no-anchor', mid.error);
-                  const legacy = {
-                    id: payload.id,
-                    instance_id: payload.instance_id,
-                    title: payload.title,
-                    description: payload.description,
-                    category: payload.category,
-                    status: payload.status,
-                    due_date: payload.due_date,
-                    due_time: payload.due_time,
-                    assigned_to: payload.assigned_to,
-                    created_by: payload.created_by,
-                    created_at: payload.created_at,
-                    completed_at: payload.completed_at,
-                    completed_by: payload.completed_by,
-                    recurring: ['none', 'weekly', 'monthly'].includes(payload.recurring)
-                      ? payload.recurring
-                      : 'none',
-                  };
-                  const retry = await client.from('activities').insert(legacy);
-                  if (retry.error) logSupabaseError('activities.insert.legacy', retry.error);
+                const withoutExtra: Record<string, unknown> = { ...payload };
+                delete withoutExtra.extra;
+                const midExtra = await client.from('activities').insert(withoutExtra);
+                if (midExtra.error) {
+                  logSupabaseError('activities.insert.no-extra', midExtra.error);
+                  const withoutAnchor: Record<string, unknown> = { ...withoutExtra };
+                  delete withoutAnchor.recurring_anchor_day;
+                  const mid = await client.from('activities').insert(withoutAnchor);
+                  if (mid.error) {
+                    logSupabaseError('activities.insert.no-anchor', mid.error);
+                    const legacy = {
+                      id: payload.id,
+                      instance_id: payload.instance_id,
+                      title: payload.title,
+                      description: payload.description,
+                      category: payload.category,
+                      status: payload.status,
+                      due_date: payload.due_date,
+                      due_time: payload.due_time,
+                      assigned_to: payload.assigned_to,
+                      created_by: payload.created_by,
+                      created_at: payload.created_at,
+                      completed_at: payload.completed_at,
+                      completed_by: payload.completed_by,
+                      recurring: ['none', 'weekly', 'monthly'].includes(payload.recurring)
+                        ? payload.recurring
+                        : 'none',
+                    };
+                    const retry = await client.from('activities').insert(legacy);
+                    if (retry.error) logSupabaseError('activities.insert.legacy', retry.error);
+                  }
                 }
               }
             }
@@ -140,6 +149,7 @@ export const useActivitiesStore = create<ActivitiesState>()(
             console.warn('Could not sync activity:', err);
           }
         }
+        return newActivity;
       },
 
       updateActivity: async (id, updates) => {
@@ -319,6 +329,7 @@ export const useActivitiesStore = create<ActivitiesState>()(
                 recurring_anchor_day:
                   d.recurring_anchor_day || parseInt(d.due_date.slice(8, 10), 10),
                 updated_at: d.updated_at || d.completed_at || d.created_at,
+                extra: (d.extra as DateExtra | null) || undefined,
               }));
               set({ activities: mergeById(get().activities, remote) });
             }

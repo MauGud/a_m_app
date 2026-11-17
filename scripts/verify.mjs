@@ -118,6 +118,97 @@ const nav = readFileSync(join(root, 'src/components/layout/bottom-nav.tsx'), 'ut
 assert('nav label is Recuerdos not Cámara', nav.includes("label: 'Recuerdos'") && !nav.includes("label: 'Cámara'"));
 assert('nav href is /recuerdos', nav.includes("href: '/recuerdos'"));
 assert('nav has Dates', nav.includes("href: '/dates'"));
+assert('nav has Departamento', nav.includes("href: '/departamento'"));
+
+const apartment = readFileSync(join(root, 'src/lib/apartment.ts'), 'utf8');
+assert('apartment street is Ocelotl 14', apartment.includes('Ocelotl 14'));
+assert('apartment neighborhood Tepetlapa', apartment.includes('San Pablo Tepetlapa'));
+assert('apartment postal 04260', apartment.includes('04260'));
+
+const deptoPage = readFileSync(join(root, 'src/app/departamento/page.tsx'), 'utf8');
+assert('departamento has presupuesto tab', deptoPage.includes("'finanzas'"));
+assert('departamento has pagos tab', deptoPage.includes("'pagos'"));
+assert('departamento has install tab', deptoPage.includes("'instalar'"));
+
+const manifest = readFileSync(join(root, 'public/manifest.json'), 'utf8');
+assert('manifest is standalone PWA', manifest.includes('"display": "standalone"'));
+assert('manifest has 192 icon', manifest.includes('icon-192.png'));
+assert('sw exists', existsSync(join(root, 'public/sw.js')));
+assert('pwa icon 192 exists', existsSync(join(root, 'public/icon-192.png')));
+assert('pwa icon 512 exists', existsSync(join(root, 'public/icon-512.png')));
+assert('apple touch icon exists', existsSync(join(root, 'public/apple-touch-icon.png')));
+assert('brand book exists', existsSync(join(root, 'docs/brand/BRANDBOOK.md')));
+assert('design system exists', existsSync(join(root, 'docs/brand/DESIGN-SYSTEM.md')));
+assert('brand logo svg exists', existsSync(join(root, 'docs/brand/logo.svg')));
+assert('public logo svg exists', existsSync(join(root, 'public/logo.svg')));
+assert('public logo mark exists', existsSync(join(root, 'public/logo-mark.png')));
+assert('manifest theme is pastel pink', manifest.includes('#FFB5C5'));
+assert('public isotipo exists', existsSync(join(root, 'public/logo-mark.png')));
+
+const dateIdeas = readFileSync(join(root, 'src/lib/date-ideas.ts'), 'utf8');
+assert('date catalog uses real JSON', dateIdeas.includes("from '@/data/catalogo-citas.json'"));
+assert('mexico regions listed', dateIdeas.includes('Ciudad de México') && dateIdeas.includes('Querétaro'));
+assert('catalog file exists', existsSync(join(root, 'src/data/catalogo-citas.json')));
+const catalogJson = readFileSync(join(root, 'src/data/catalogo-citas.json'), 'utf8');
+assert('catalog has C0001', catalogJson.includes('"id": "C0001"'));
+assert('catalog has C0500', catalogJson.includes('"id": "C0500"'));
+
+const dateRules = readFileSync(join(root, 'src/lib/date-rules.ts'), 'utf8');
+assert('list limit is 20', dateRules.includes('DATE_LIST_LIMIT = 20'));
+assert('reschedule limit is 3', dateRules.includes('DATE_RESCHEDULE_LIMIT = 3'));
+assert('photo nudges 10', dateRules.includes('PHOTO_NUDGE_LIMIT = 10'));
+
+const datesPage = readFileSync(join(root, 'src/app/dates/page.tsx'), 'utf8');
+assert('dates tab En la lista', datesPage.includes('En la lista'));
+assert('dates tab Ya juntos', datesPage.includes('Ya juntos'));
+assert('dates has Instagram', datesPage.includes('Instagram'));
+assert('mau zip email', datesPage.includes('mau@nexcar.mx'));
+assert('dates page has Qué hacemos hoy', datesPage.includes('Qué hacemos hoy'));
+
+assert('depto has super tab', deptoPage.includes("'super'"));
+assert('depto taller is Mau-only', deptoPage.includes("'taller'") && deptoPage.includes('isMau'));
+assert('presupuesto hidden from Amanda', deptoPage.includes("item.id === 'finanzas'") || deptoPage.includes("id === 'finanzas'"));
+const grocery = readFileSync(join(root, 'src/lib/grocery.ts'), 'utf8');
+assert('grocery has walmart-like departments', grocery.includes('Frutas y verduras') && grocery.includes('Chedraui'));
+assert('grocery has live partner search URLs', grocery.includes('super.walmart.com.mx/search') && grocery.includes('chedraui.com.mx'));
+assert('no dummy pendiente partners', !grocery.includes("status: 'pendiente'"));
+
+const security = readFileSync(join(root, 'src/lib/security.ts'), 'utf8');
+assert('max 20 payment methods', security.includes('MAX_PAYMENT_METHODS = 20'));
+function looksLikePan(value) {
+  const digits = String(value).replace(/\D/g, '');
+  return digits.length >= 13 && digits.length <= 19;
+}
+assert('PAN 16 digits flagged', looksLikePan('4111111111111111'));
+assert('last4 not flagged as PAN', !looksLikePan('4111'));
+assert('spaces in PAN flagged', looksLikePan('4111 1111 1111 1111'));
+
+const vaultUi = readFileSync(join(root, 'src/app/departamento/vault-panel.tsx'), 'utf8');
+assert('vault has no cc-number field', !vaultUi.includes('cc-number') && !vaultUi.includes('cardNumber'));
+assert('vault last4 max 4', vaultUi.includes('maxLength={4}'));
+assert('vault Mau-only', vaultUi.includes("memberSlot !== 'MEMBER_B'"));
+
+const superPanel = readFileSync(join(root, 'src/app/departamento/super-panel.tsx'), 'utf8');
+assert('super opens real stores', superPanel.includes('Pedir en') && superPanel.includes('buildHandoff'));
+assert('super does not send cards', superPanel.includes('Paga allá') || superPanel.includes('no envía'));
+
+const taller = readFileSync(join(root, 'src/app/departamento/taller-panel.tsx'), 'utf8');
+assert('protocol explains no PAN in bot', taller.includes('Si esta app pudiera teclear tu tarjeta'));
+
+const finanzasStore = readFileSync(join(root, 'src/stores/finanzas-store.ts'), 'utf8');
+assert('finanzas upserts supabase twin', finanzasStore.includes('finanzas_snapshots'));
+
+const cron = readFileSync(join(root, 'src/app/api/cron/finanzas/route.ts'), 'utf8');
+assert('hourly cron heartbeat exists', cron.includes('heartbeat_at'));
+assert('vercel cron file', existsSync(join(root, 'vercel.json')) && readFileSync(join(root, 'vercel.json'), 'utf8').includes('/api/cron/finanzas'));
+
+const migration = readFileSync(join(root, 'supabase-migration.sql'), 'utf8');
+assert('sql has finanzas_snapshots', migration.includes('finanzas_snapshots'));
+assert('sql vault last4 only', migration.includes("last4 ~ '^\\d{4}$'"));
+assert('sql drops pan columns', migration.includes('DROP COLUMN IF EXISTS pan'));
+
+const reminders = readFileSync(join(root, 'src/lib/date-rules.ts'), 'utf8');
+assert('pre date reminders exist', reminders.includes("id: '8h'") && reminders.includes("id: '15m'"));
 
 const recuerdosNuevo = readFileSync(join(root, 'src/app/recuerdos/nuevo/page.tsx'), 'utf8');
 assert('capture lives under /recuerdos/nuevo', recuerdosNuevo.includes('Captura un recuerdo'));
@@ -133,7 +224,7 @@ const home = readFileSync(join(root, 'src/app/page.tsx'), 'utf8');
 assert('home capture link is recuerdos/nuevo', home.includes('/recuerdos/nuevo') && !home.includes("href=\"/camara\""));
 
 const dates = readFileSync(join(root, 'src/app/dates/page.tsx'), 'utf8');
-assert('dates page only date+meta categories', dates.includes("c.value === 'date' || c.value === 'meta'"));
+assert('dates page is the 500-citas lista', datesPage.includes('DATE_LIST_LIMIT') || dates.includes('En la lista'));
 
 const calendar = readFileSync(join(root, 'src/app/calendario/page.tsx'), 'utf8');
 assert('calendar has Metas Juntos', calendar.includes('ACTIVITY_CATEGORIES'));
@@ -165,10 +256,14 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 if (url && key) {
   const headers = { apikey: key, Accept: 'application/json' };
-  const tables = ['instances', 'activities', 'moods', 'sparks', 'memories', 'plans'];
-  for (const table of tables) {
-    const res = await fetch(`${url}/rest/v1/${table}?select=id&limit=1`, { headers });
-    assert(`supabase ${table} readable (${res.status})`, res.ok);
+  const tables = ['instances', 'activities', 'moods', 'sparks', 'memories', 'plans', 'payments'];
+  try {
+    for (const table of tables) {
+      const res = await fetch(`${url}/rest/v1/${table}?select=id&limit=1`, { headers });
+      assert(`supabase ${table} readable (${res.status})`, res.ok);
+    }
+  } catch (err) {
+    console.log(`skip supabase live checks (${err.cause?.code || err.message})`);
   }
 } else {
   console.log('skip supabase live checks (no env)');

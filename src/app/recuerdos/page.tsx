@@ -131,6 +131,24 @@ export default function RecuerdosPage() {
                 <div className="flex gap-2 pt-2">
                   <Button
                     variant="ghost"
+                    className="flex-1"
+                    onClick={async () => {
+                      const text = selectedMemory.caption || 'Un recuerdo de A & M';
+                      try {
+                        if (navigator.share) {
+                          await navigator.share({ title: 'A & M', text });
+                        } else {
+                          window.open('https://www.instagram.com/', '_blank', 'noopener');
+                        }
+                      } catch {
+                        window.open('https://www.instagram.com/', '_blank', 'noopener');
+                      }
+                    }}
+                  >
+                    Instagram
+                  </Button>
+                  <Button
+                    variant="ghost"
                     onClick={() => setSelectedId(null)}
                     className="flex-1"
                   >

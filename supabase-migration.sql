@@ -137,3 +137,114 @@ CREATE POLICY "Anyone can update memories" ON storage.objects FOR UPDATE USING (
 CREATE POLICY "Anyone can upload to sparks" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'sparks');
 CREATE POLICY "Anyone can read sparks" ON storage.objects FOR SELECT USING (bucket_id = 'sparks');
 CREATE POLICY "Anyone can update sparks" ON storage.objects FOR UPDATE USING (bucket_id = 'sparks');
+
+CREATE TABLE IF NOT EXISTS payments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  instance_id UUID NOT NULL REFERENCES instances(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  amount NUMERIC NOT NULL DEFAULT 0,
+  notes TEXT,
+  due_date DATE NOT NULL,
+  assigned_to TEXT NOT NULL CHECK (assigned_to IN ('MEMBER_A', 'MEMBER_B')),
+  created_by TEXT NOT NULL CHECK (created_by IN ('MEMBER_A', 'MEMBER_B')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed')),
+  recurring TEXT NOT NULL DEFAULT 'none',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  notified_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_payments_instance_date ON payments(instance_id, due_date);
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can read own payments" ON payments;
+DROP POLICY IF EXISTS "Users can insert own payments" ON payments;
+DROP POLICY IF EXISTS "Users can update own payments" ON payments;
+DROP POLICY IF EXISTS "Users can delete own payments" ON payments;
+CREATE POLICY "Users can read own payments" ON payments FOR SELECT USING (true);
+CREATE POLICY "Users can insert own payments" ON payments FOR INSERT WITH CHECK (true);
+CREATE POLICY "Users can update own payments" ON payments FOR UPDATE USING (true);
+CREATE POLICY "Users can delete own payments" ON payments FOR DELETE USING (true);
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE payments;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Dates extra + recuerdos vinculados + huellas de uso
+ALTER TABLE activities ADD COLUMN IF NOT EXISTS extra JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE memories ADD COLUMN IF NOT EXISTS date_id UUID;
+CREATE INDEX IF NOT EXISTS idx_memories_date_id ON memories(date_id);
+
+CREATE TABLE IF NOT EXISTS usage_events (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  instance_id UUID NOT NULL REFERENCES instances(id) ON DELETE CASCADE,
+  member TEXT NOT NULL CHECK (member IN ('MEMBER_A', 'MEMBER_B')),
+  kind TEXT NOT NULL,
+  label TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_usage_instance ON usage_events(instance_id, created_at DESC);
+ALTER TABLE usage_events ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can read usage" ON usage_events;
+DROP POLICY IF EXISTS "Users can insert usage" ON usage_events;
+CREATE POLICY "Users can read usage" ON usage_events FOR SELECT USING (true);
+CREATE POLICY "Users can insert usage" ON usage_events FOR INSERT WITH CHECK (true);
+
+CREATE TABLE IF NOT EXISTS cart_items (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  instance_id UUID NOT NULL REFERENCES instances(id) ON DELETE CASCADE,
+  sku_id TEXT NOT NULL,
+  qty INTEGER NOT NULL DEFAULT 1,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE cart_items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can read cart" ON cart_items;
+DROP POLICY IF EXISTS "Users can write cart" ON cart_items;
+CREATE POLICY "Users can read cart" ON cart_items FOR SELECT USING (true);
+CREATE POLICY "Users can write cart" ON cart_items FOR ALL USING (true) WITH CHECK (true);
+
+-- Finanzas twin, vault without PAN, Mau ops
+CREATE TABLE IF NOT EXISTS finanzas_snapshots (
+  instance_id UUID PRIMARY KEY REFERENCES instances(id) ON DELETE CASCADE,
+  snapshot JSONB NOT NULL,
+  source TEXT NOT NULL DEFAULT 'app',
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  heartbeat_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE finanzas_snapshots ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can read finanzas" ON finanzas_snapshots;
+DROP POLICY IF EXISTS "Users can write finanzas" ON finanzas_snapshots;
+CREATE POLICY "Users can read finanzas" ON finanzas_snapshots FOR SELECT USING (true);
+CREATE POLICY "Users can write finanzas" ON finanzas_snapshots FOR ALL USING (true) WITH CHECK (true);
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE finanzas_snapshots;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE TABLE IF NOT EXISTS payment_methods (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  instance_id UUID NOT NULL REFERENCES instances(id) ON DELETE CASCADE,
+  alias TEXT NOT NULL,
+  brand TEXT NOT NULL,
+  last4 TEXT NOT NULL CHECK (last4 ~ '^\d{4}$'),
+  exp_month INTEGER NOT NULL CHECK (exp_month BETWEEN 1 AND 12),
+  exp_year INTEGER NOT NULL,
+  owner TEXT NOT NULL CHECK (owner IN ('MEMBER_A', 'MEMBER_B')),
+  processor TEXT NOT NULL DEFAULT 'handoff',
+  processor_ref TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT payment_methods_no_pan CHECK (char_length(processor_ref) < 128)
+);
+CREATE INDEX IF NOT EXISTS idx_payment_methods_instance ON payment_methods(instance_id);
+ALTER TABLE payment_methods ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can read methods" ON payment_methods;
+DROP POLICY IF EXISTS "Users can write methods" ON payment_methods;
+CREATE POLICY "Users can read methods" ON payment_methods FOR SELECT USING (true);
+CREATE POLICY "Users can write methods" ON payment_methods FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE payment_methods DROP COLUMN IF EXISTS pan;
+ALTER TABLE payment_methods DROP COLUMN IF EXISTS cvv;
+ALTER TABLE payment_methods DROP COLUMN IF EXISTS card_number;
+ALTER TABLE payment_methods DROP COLUMN IF EXISTS number;

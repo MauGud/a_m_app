@@ -54,7 +54,7 @@ export function daysAgoISO(days: number): string {
   return getLocalISODate(date);
 }
 
-function addCalendarMonths(date: Date, months: number, anchorDay?: number): Date {
+export function addCalendarMonths(date: Date, months: number, anchorDay?: number): Date {
   const day = anchorDay ?? date.getDate();
   const next = new Date(date);
   next.setDate(1);

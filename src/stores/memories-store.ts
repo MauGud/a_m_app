@@ -10,6 +10,7 @@ export interface Memory {
   image_front: string;
   image_back: string;
   caption?: string;
+  date_id?: string;
   location?: {
     latitude: number;
     longitude: number;
@@ -67,6 +68,7 @@ export const useMemoriesStore = create<MemoriesState>()(
                     image_front_url: frontUrl,
                     image_back_url: backUrl,
                     caption: memory.caption || null,
+                    date_id: memory.date_id || null,
                     latitude: memory.location?.latitude || null,
                     longitude: memory.location?.longitude || null,
                     address: memory.location?.address || null,
@@ -126,6 +128,7 @@ export const useMemoriesStore = create<MemoriesState>()(
                 image_front: d.image_front_url,
                 image_back: d.image_back_url,
                 caption: d.caption || undefined,
+                date_id: d.date_id || undefined,
                 location:
                   d.latitude && d.longitude
                     ? {

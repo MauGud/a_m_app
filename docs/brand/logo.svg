@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="A &amp; M">
+  <title>A &amp; M</title>
+  <defs>
+    <linearGradient id="flame" x1="256" y1="72" x2="256" y2="268" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFAE42"/>
+      <stop offset="0.48" stop-color="#FF5E3A"/>
+      <stop offset="1" stop-color="#E53E3E"/>
+    </linearGradient>
+    <linearGradient id="waveLeft" x1="80" y1="220" x2="240" y2="430" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38BDF8"/>
+      <stop offset="0.55" stop-color="#0284C7"/>
+      <stop offset="1" stop-color="#0F52BA"/>
+    </linearGradient>
+    <linearGradient id="waveRight" x1="430" y1="220" x2="270" y2="430" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7DD3FC"/>
+      <stop offset="0.5" stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#0284C7"/>
+    </linearGradient>
+    <mask id="a-cut">
+      <rect width="512" height="512" fill="#fff"/>
+      <path fill="#000" d="M256 132l38 92h-18l-6-16h-28l-6 16h-18l38-92zm0 28l-12 32h24l-12-32z"/>
+    </mask>
+  </defs>
+  <!-- Isolation: 15% of 512 H 77px. Artwork lives inside 77435. -->
+  <path fill="url(#waveLeft)" d="M118 250c28-42 62-58 92-50 18 5 32 18 38 34 8-22 28-36 52-32-38-8-78 6-104 40-22 28-38 72-32 118 4 28 18 52 40 70-62-22-102-78-96-140 2-22 6-32 10-40z"/>
+  <path fill="url(#waveLeft)" d="M96 320c18-48 52-78 90-74 14 2 26 10 34 20-36-4-68 18-84 56-12 28-12 60 2 88-38-22-56-58-42-90z"/>
+  <path fill="url(#waveRight)" d="M394 250c-28-42-62-58-92-50-18 5-32 18-38 34-8-22-28-36-52-32 38-8 78 6 104 40 22 28 38 72 32 118-4 28-18 52-40 70 62-22 102-78 96-140-2-22-6-32-10-40z"/>
+  <path fill="url(#waveRight)" d="M416 320c-18-48-52-78-90-74-14 2-26 10-34 20 36-4 68 18 84 56 12 28 12 60-2 88 38-22 56-58 42-90z"/>
+  <path fill="url(#flame)" mask="url(#a-cut)" d="M256 86c8 28 14 48 8 74-4 18-16 32-14 52 22-16 40-42 48-70 6 22 4 48-8 72-10 20-26 36-28 58-2 16 6 28 6 44 0 36-28 62-62 62s-62-26-62-62c0-20 8-36 6-54-2-22-16-38-22-60-8-28-6-56 4-80 14 26 34 46 54 58-2-24-4-46 10-72 8-16 22-32 32-46 8 14 18 28 28 46z"/>
+</svg>

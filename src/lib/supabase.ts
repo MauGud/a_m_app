@@ -127,6 +127,7 @@ export interface DbMemory {
   image_front_url: string;
   image_back_url: string;
   caption: string | null;
+  date_id?: string | null;
   latitude: number | null;
   longitude: number | null;
   address: string | null;
@@ -170,4 +171,22 @@ export interface DbActivity {
   created_at: string;
   completed_at: string | null;
   completed_by: 'MEMBER_A' | 'MEMBER_B' | null;
+  extra?: Record<string, unknown> | null;
+}
+
+export interface DbPayment {
+  id: string;
+  instance_id: string;
+  title: string;
+  amount: number;
+  notes: string | null;
+  due_date: string;
+  assigned_to: 'MEMBER_A' | 'MEMBER_B';
+  created_by: 'MEMBER_A' | 'MEMBER_B';
+  status: 'pending' | 'completed';
+  recurring: string;
+  created_at: string;
+  completed_at: string | null;
+  notified_at: string | null;
+  updated_at?: string | null;
 }

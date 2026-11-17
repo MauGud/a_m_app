@@ -118,6 +118,27 @@ CREATE TABLE activities (
 CREATE INDEX idx_activities_instance_date ON activities(instance_id, due_date);
 
 -- ============================================
+-- 7. PAYMENTS (Recordatorios de pagos del depto)
+-- ============================================
+CREATE TABLE payments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  instance_id UUID NOT NULL REFERENCES instances(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  amount NUMERIC NOT NULL DEFAULT 0,
+  notes TEXT,
+  due_date DATE NOT NULL,
+  assigned_to TEXT NOT NULL CHECK (assigned_to IN ('MEMBER_A', 'MEMBER_B')),
+  created_by TEXT NOT NULL CHECK (created_by IN ('MEMBER_A', 'MEMBER_B')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed')),
+  recurring TEXT NOT NULL DEFAULT 'none',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  notified_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_payments_instance_date ON payments(instance_id, due_date);
+
+-- ============================================
 -- ROW LEVEL SECURITY (RLS)
 -- ============================================
 
@@ -129,6 +150,7 @@ ALTER TABLE memories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sparks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE spark_submissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE activities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Users can only access their own instance data
 -- We use instance_id passed as a header or JWT claim
@@ -210,6 +232,11 @@ CREATE POLICY "Users can update own activities" ON activities
 CREATE POLICY "Users can delete own activities" ON activities
   FOR DELETE USING (true);
 
+CREATE POLICY "Users can read own payments" ON payments FOR SELECT USING (true);
+CREATE POLICY "Users can insert own payments" ON payments FOR INSERT WITH CHECK (true);
+CREATE POLICY "Users can update own payments" ON payments FOR UPDATE USING (true);
+CREATE POLICY "Users can delete own payments" ON payments FOR DELETE USING (true);
+
 -- ============================================
 -- STORAGE BUCKETS (para fotos)
 -- ============================================
@@ -234,3 +261,4 @@ ALTER PUBLICATION supabase_realtime ADD TABLE memories;
 ALTER PUBLICATION supabase_realtime ADD TABLE sparks;
 ALTER PUBLICATION supabase_realtime ADD TABLE spark_submissions;
 ALTER PUBLICATION supabase_realtime ADD TABLE activities;
+ALTER PUBLICATION supabase_realtime ADD TABLE payments;

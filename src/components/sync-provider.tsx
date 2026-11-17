@@ -7,7 +7,11 @@ import { useMoodStore } from '@/stores/mood-store';
 import { useMemoriesStore } from '@/stores/memories-store';
 import { useSparkStore } from '@/stores/spark-store';
 import { useActivitiesStore } from '@/stores/activities-store';
+import { usePaymentsStore } from '@/stores/payments-store';
+import { useFinanzasStore } from '@/stores/finanzas-store';
+import { useVaultStore } from '@/stores/vault-store';
 import { isSupabaseConfigured } from '@/lib/supabase';
+import { DateReminders } from '@/components/date-reminders';
 
 export function SyncProvider({ children }: { children: React.ReactNode }) {
   const { hasHydrated, isAuthenticated, instanceId, isOnline, setOnline, finishHydration, reconcileInstance } =
@@ -28,6 +32,13 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
   const activitiesSubscribe = useActivitiesStore((s) => s.subscribeToChanges);
   const activitiesFetch = useActivitiesStore((s) => s.fetchFromSupabase);
+
+  const paymentsSubscribe = usePaymentsStore((s) => s.subscribeToChanges);
+  const paymentsFetch = usePaymentsStore((s) => s.fetchFromSupabase);
+  const finanzasSubscribe = useFinanzasStore((s) => s.subscribeToChanges);
+  const finanzasFetch = useFinanzasStore((s) => s.fetchFromSupabase);
+  const vaultSubscribe = useVaultStore((s) => s.subscribeToChanges);
+  const vaultFetch = useVaultStore((s) => s.fetchFromSupabase);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -68,6 +79,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     memoriesFetch();
     sparksFetch();
     activitiesFetch();
+    paymentsFetch();
+    finanzasFetch();
+    vaultFetch();
 
     const unsubscribers = [
       plansSubscribe(),
@@ -75,6 +89,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       memoriesSubscribe(),
       sparksSubscribe(),
       activitiesSubscribe(),
+      paymentsSubscribe(),
+      finanzasSubscribe(),
+      vaultSubscribe(),
     ];
 
     const poll = setInterval(() => {
@@ -83,6 +100,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       memoriesFetch();
       sparksFetch();
       activitiesFetch();
+      paymentsFetch();
+      finanzasFetch();
+      vaultFetch();
     }, 5000);
 
     return () => {
@@ -99,12 +119,23 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     memoriesFetch,
     sparksFetch,
     activitiesFetch,
+    paymentsFetch,
+    finanzasFetch,
+    vaultFetch,
     plansSubscribe,
     moodsSubscribe,
     memoriesSubscribe,
     sparksSubscribe,
     activitiesSubscribe,
+    paymentsSubscribe,
+    finanzasSubscribe,
+    vaultSubscribe,
   ]);
 
-  return <>{children}</>;
+  return (
+    <>
+      <DateReminders />
+      {children}
+    </>
+  );
 }
